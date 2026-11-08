@@ -6,8 +6,8 @@ diagnose a car in a shop or at home, explain it to a person, clear codes after a
 fix, and walk the person through resets.
 
 In-depth support: **2004 Honda CR-V**, **2016 Honda Odyssey**, **2020 Hyundai Kona Electric** (battery
-health with all 98 cells, 12 V, tires, and trouble codes from 10 other modules). Any OBD-II car gets
-the generic diagnosis.
+health with all 98 cells, 12 V, tires, and trouble codes from 13 of its 14 modules — the airbag module
+needs the factory tool). Any OBD-II car gets the generic diagnosis.
 
 ```
 ./install.sh                                   # build, install ~/.local/bin/carlink, link the skill

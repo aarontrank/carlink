@@ -179,6 +179,13 @@ problems and reset errors. The skill must work even for less capable agents.
   normal driving with none of the codes back, which is right for every kind of code. The re-scope is
   pinned by a test and a mutation run instead of a fifteenth round; the residuals are review K68.
 
+### Phase 7 — skill trial round 4
+- **D48. Trial round 4** re-ran the Kona shop job and the CR-V inspection job on the revised skill and
+  added a Kona owner job (battery health, TPMS light). The round-3 fixes held in every run: practice
+  prefix from the first message, the VIN read off the car, the airbag safety line, "a clear will not
+  get you through the inspection", and the post-clear message. The remaining confusions were wording
+  (review T18–T20), so the trials stop here.
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and

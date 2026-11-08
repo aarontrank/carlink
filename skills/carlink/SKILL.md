@@ -34,7 +34,7 @@ description: Diagnose cars through an OBDLink EX adapter with the `carlink` comm
 | "What does code P0xxx mean?" (no car needed) | `carlink dtc <CODE> --vehicle <id>` |
 | "Is the battery OK?" (Kona: big battery or 12 V; others: 12 V) | steps 1 → 3, then read the findings and `extended` |
 | "Is it misfiring / which cylinder?" | step 5, `carlink tests` |
-| "Clear / reset the codes or the light" | step 6 (only after a repair, with a yes) |
+| "Clear / reset the codes or the light" | step 6 (always with a yes; if nothing was repaired yet, its first paragraph) |
 | "Did the repair work?" / "Will it pass inspection?" | step 3, then `inspection` and step 6.4 |
 | "Reset the oil light / Maintenance Minder / TPMS light", "idle relearn" | step 7 |
 | "What changed since last time?" | the History section |
@@ -49,9 +49,10 @@ plugged in and on). For the Kona: press start with a foot on the brake until **R
 carlink probe
 ```
 
-- `"ok": true` → go on. Note `vin` and `vehicle.id` if they are there. A failed `vin` check under
-  `"ok": true` only means the car does not report its VIN (normal on the CR-V and the Kona): ask for it
-  in step 2.
+- `"ok": true` → go on. Note `vin` and `vehicle.id` if they are there (`vehicle` is null when the car
+  does not report its VIN: use the profile id of the car the person names, step 2). A failed `vin`
+  check under `"ok": true` only means the car does not report its VIN (normal on the CR-V and the
+  Kona): ask for it in step 2.
 - `"ok": false` → tell the person the `what_to_do` of the failed check, wait, run `carlink probe` again.
 
 ## Step 2 — Find out about the car and the problem
@@ -90,7 +91,7 @@ Read the output **in this order**:
 | `inspection` | `likely_pass` and `reasons` for an emissions inspection (null on the Kona) |
 | `scan.monitors[].monitors[]` | each self-test: `name` and `incomplete` (`true` = not finished since the last clear) |
 | `tests.misfire[]` | misfire counts per cylinder (`current` = this drive, `average` = recent drives; `cylinder: 0` = all cylinders together). 0 is normal. `tests` is null on the CR-V: use `carlink tests` (step 5) |
-| `modules[]` | (Kona) **brake, airbag, body and other module codes — they are only here, never in `codes[]`**: `name`, `description`, `dtcs[]` with `state` (`active` = failing now, `stored`, `pending`, `history`); `refused` = carlink could not read that module |
+| `modules[]` | (Kona) **brake, airbag, body and other module codes — they are only here, never in `codes[]`**: `name`, `description` (says which warning light it belongs to: ABS/brake → `IEB`, airbag → `SRS`, tire pressure → `BCM`), `dtcs[]` with `state` (`active` = failing now, `stored`, `pending`, `history`); `refused` = carlink could not read that module |
 | `extended` | (Kona) battery and car data: `soh`, `soc_display`, `cell_delta_v`, `aux_12v`, `tire_*_psi`, `odometer_mi`… (empty on other cars) |
 | `vehicle.recalls`, `vehicle.notes` | recalls to check by VIN at nhtsa.gov/recalls, and what carlink cannot reach on this car |
 | `identity_conflict` | not null = this is not the car you were told: STOP (step 2) |
@@ -121,9 +122,10 @@ the finding text). Shape:
 - If the person says the **airbag (SRS) light** is on, say first that the airbags may not work properly
   until it is repaired, and that carlink cannot read the airbag system on these cars: it needs a dealer
   or a shop with the factory tool.
-- Kona battery: report `soh` (state of health). carlink adds a finding when it is below 90 %; with no
-  such finding, give the number without judging it. `cell_delta_v` is only a health check when
-  `soc_display` is 80 % or more; below that, say the cell check needs a charge to 80 % first.
+- Kona battery: report `soh` (state of health) and `aux_12v`. carlink adds a finding when `soh` is below
+  90 % or the 12 V battery is low; with no such finding, give the numbers without judging them.
+  `cell_delta_v` is only a health check when `soc_display` is 80 % or more; below that, say the cell
+  check needs a charge to 80 % first.
 - Never recommend clearing codes as a fix. Clearing only turns the light off.
 
 ## Step 5 — Dig deeper when needed
@@ -144,7 +146,8 @@ the finding text). Shape:
     13.5 V or more.
   - Catalyst (P0420): `o2_b1s2_v,rpm` while the person holds 2,500 rpm (engine warm): a steady
     downstream reading around 0.6–0.7 V is a good catalyst; swinging like the upstream sensor is a worn one.
-  - Kona battery: `--vehicle kona-ev-2020` with no `--keys`.
+  - Kona battery: `--vehicle kona-ev-2020` with no `--keys` (`soh` and the cell spread come from
+    `scan`, not `watch`).
   - A wrong key is refused with the list of valid keys.
 
 ## Step 6 — After the repair: clear the codes and check the fix
@@ -164,10 +167,10 @@ module (Kona), also name the system: *"…and it clears the brake system's store
 **6.2 Clear.** Before you type `--confirm-clear-codes`, you must already have sent the 6.1 message and
 received a yes in this conversation. Then tell the person how to leave the car for the clear, and wait
 for "done". **Hondas and other cars:** engine **OFF**, ignition **ON**. **Kona:** as it was for the
-scan — READY, in Park, parking brake on. If the Kona's clear comes back
-`refused` or `not_acknowledged`, the one more try (6.3) is with the car ON but **not** READY: the person
-switches the car off, then — foot **off** the brake — presses the POWER button twice (the dashboard
-lights up; READY does not show).
+scan — READY, in Park, parking brake on. If the Kona's clear comes back `refused` or
+`not_acknowledged`, the one more try (6.3) is with the car ON but **not** READY: the person switches the
+car off, then — foot **off** the brake — presses the POWER button twice (the dashboard lights up; READY
+does not show).
 
 ```
 carlink clear --vehicle <id> --vin <VIN> --confirm-clear-codes --note "<what was repaired>"
@@ -198,13 +201,15 @@ or pending codes left. This does not mean it is fixed yet: that is known after a
 driving."* If a code is still listed as `permanent`, add that it stays until the car re-tests the repair
 itself, which is normal. Then go through every `next_steps` item with them, one at a time.
 
-**6.4 Is it fixed?** Not right after clearing. For engine codes, it is fixed when, after normal
-driving (city and highway, a few days), a new `carlink scan` shows the code has not come back as
-pending or stored, and each self-test that `next_steps` names shows `"incomplete": false` in
-`scan.monitors[].monitors[]`. The `misfire`, `fuel_system` and `components` self-tests show `false`
-almost at once: for those, only the days of driving without the code coming back count. For module codes (Kona), it is fixed when, after a few days of
-normal driving, the module's code has not come back in `modules[]`. Do not say "fixed" before that. `carlink history compare <before_id> <after_id>`
-shows what changed.
+**6.4 Is it fixed?** Not right after clearing. For engine codes, it is fixed only when **both** are
+true on a new `carlink scan` taken after a few days of normal driving (city and highway):
+1. the codes have not come back as pending or stored, and
+2. each self-test that `next_steps` names shows `"incomplete": false` in `scan.monitors[].monitors[]`.
+
+(The `misfire`, `fuel_system` and `components` self-tests read `false` almost at once, so for codes that
+belong to them, point 1 is what counts.) For module codes (Kona), it is fixed when, after a few days of
+normal driving, the module's code has not come back in `modules[]`. Do not say "fixed" before that.
+`carlink history compare <before_id> <after_id>` shows what changed.
 
 ## Step 7 — Resets and relearns
 
@@ -216,19 +221,20 @@ Each entry has `name`, `steps`, `notes` and `carlink_can_do`. Only code clearing
 (step 6). Everything else — oil life / Maintenance Minder, TPMS light, idle learn, crank learn,
 service reminder — **the person does on the car**: each item in `steps` is one step; give them **one
 at a time** and wait for "done". A step that is a `carlink …` command is for you to run, not for the
-person. Tell the person anything in `notes` (e.g. that a step is unverified
-for this car, or needs a dealer tool).
+person. Tell the person anything in `notes` (e.g. that a step is unverified for this car, or needs a
+dealer tool).
 
 After a clear, a Honda can idle high or unevenly, or stall, until the idle learn is done — that is
 expected, and it is why the idle learn is needed.
 
-To follow an idle learn, check rpm and temperature now and then. If the reset gives a `carlink watch`
-command (in `steps` or `notes`), use that one; otherwise
+To follow an idle learn, run `carlink watch` while the person does a step that names an rpm or a
+temperature, to confirm it (for a long idle, one run near its end is enough). If the reset gives a
+`carlink watch` command (in `steps` or `notes`), use that one; otherwise
 `carlink watch --vehicle <id> --keys rpm,coolant_temp --samples 30 --interval-ms 1000`. A `watch`
 command runs until all samples are taken: keep each one under about 90 seconds (samples × interval)
 and run it again if you need more. If a reading disagrees with what the person reports (for example
 `stats.rpm` stays near idle although they say they are holding 3,000 rpm), tell them what carlink shows
-and ask them to check before going on.
+and ask them to check before going on. (Not in practice: the simulator's readings never change.)
 
 ## History
 
@@ -245,11 +251,11 @@ carlink history show <session_id>              # one full saved scan
 ```
 
 `present_in_latest` is true only for a code that is set now (a code left only as `permanent` is
-waiting for the car to re-test). `dtc_count` in `history sessions` counts the code entries saved with that
-visit: a code in two lists (e.g. stored and permanent) counts twice. Trend points carry `kind` and `engine_running`: compare like with like
-(12.6 V engine off and 14 V engine running are both normal). A clear saves two visits (before and
-after) in the state the clear needed: compare their codes, but compare readings only between visits
-taken in the same state (engine running or off; Kona READY or ON).
+waiting for the car to re-test). `dtc_count` in `history sessions` counts the code entries saved with
+that visit: a code in two lists (e.g. stored and permanent) counts twice. Trend points carry `kind` and
+`engine_running`: compare like with like (12.6 V engine off and 14 V engine running are both normal).
+A clear saves two visits (before and after) in the state the clear needed: compare their codes, but
+compare readings only between visits taken in the same state (engine running or off; Kona READY or ON).
 
 ## When a command fails
 
@@ -283,7 +289,7 @@ The JSON has `error`, `error_kind` and `what_to_do`. Tell the person `what_to_do
   codes need a Honda tool.** After clearing: idle learn, then crank pattern learn.
 - **2020 Hyundai Kona Electric (`kona-ev-2020`)** — electric: no engine data. carlink reads battery
   health (`soh`, 98 cell voltages, `cell_delta_v`), the 12 V battery, tire pressures and codes from
-  14 modules. No VIN from the car: pass `--vehicle kona-ev-2020 --vin <VIN>`. The airbag module's
+  13 of its 14 modules. No VIN from the car: pass `--vehicle kona-ev-2020 --vin <VIN>`. The airbag module's
   codes are **not** readable by carlink. Check recall **21V-127** (battery pack replacement) was done.
 
 ## What carlink cannot do
