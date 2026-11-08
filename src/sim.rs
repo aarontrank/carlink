@@ -451,9 +451,18 @@ impl Transport for Sim {
                     m.dtcs.clear();
                 }
                 if req == [0x04] && !self.ignore_clear {
+                    let first_value_byte = if self.bus.is_can() { 3 } else { 2 };
                     for e in &mut self.ecus {
                         e.stored.clear();
                         e.pending.clear();
+                        // A service 04 clear zeroes the service 06 results: value and limits (wiki obd2-mode06).
+                        for record in e.mode06.values_mut() {
+                            if self.bus.is_can() {
+                                record.chunks_mut(9).for_each(|r| r.iter_mut().skip(first_value_byte).for_each(|b| *b = 0));
+                            } else {
+                                record.iter_mut().skip(first_value_byte).for_each(|b| *b = 0);
+                            }
+                        }
                         // Clearing restarts the non-continuous self-tests: every supported one becomes incomplete.
                         if let Some(m) = e.pids.get_mut(&0x01) {
                             m[3] = m[2];
@@ -488,6 +497,23 @@ mod tests {
         assert_eq!(a.bus(), Bus::Can29);
         let rpm: Vec<f64> = a.query("010C").unwrap().iter().filter_map(|m| crate::obd::decode_pid(0x0C, &m.data[2..]).map(|r| r.value)).collect();
         assert_eq!(rpm, vec![0.0]);
+    }
+
+    #[test]
+    fn a_clear_resets_the_self_test_results_as_a_real_ecu_does() {
+        let mut a = crate::adapter::Adapter::connect(Sim::from_spec("odyssey-2016:engine-off").unwrap()).unwrap();
+        a.query("04").unwrap();
+        let t = crate::mode06::read(&mut a, Some("odyssey-2016")).unwrap();
+        assert!(!t.misfire.is_empty() && t.misfire.iter().all(|m| m.current == Some(0.0) && (m.cylinder == 0 || m.average == Some(0.0))), "{:?}", t.misfire);
+        assert!(!t.results.is_empty() && t.results.iter().all(|r| r.verdict == "not_run"), "{:?}", t.results.iter().map(|r| r.verdict).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn a_k_line_clear_resets_the_self_test_results_too() {
+        let mut a = crate::adapter::Adapter::connect(Sim::from_spec("crv-2004:engine-off").unwrap()).unwrap();
+        a.query("04").unwrap();
+        let t = crate::mode06::read(&mut a, Some("crv-2004")).unwrap();
+        assert!(!t.results.is_empty() && t.results.iter().all(|r| r.verdict == "not_run"), "{:?}", t.results.iter().map(|r| r.verdict).collect::<Vec<_>>());
     }
 
     #[test]

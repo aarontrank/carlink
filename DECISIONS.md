@@ -167,6 +167,18 @@ problems and reset errors. The skill must work even for less capable agents.
   no power change before the first try, no dead end if one state is wrong, and the 12 V battery is
   charged during the first try. The remaining round-11 items are recorded, not patched (review K53–K57).
 
+### Phase 6 — skill trial round 3
+- **D46. Trial round 3** gave the skill to a weaker model (Haiku) on three new jobs: a Kona shop job
+  (airbag and ABS lights), a 29-bit Odyssey repair check over two visits, and a CR-V owner wanting the
+  light cleared before an inspection. All three cleared only after the 6.1 message and a yes, never
+  touched the airbag/battery/smart-key modules, labelled practice data, and never called a repair fixed.
+  Every confusion they reported became a skill or simulator fix (review T10–T17).
+- **D47. Review rounds on phase 6 stop at round 14 (stopping rule).** Rounds 13 and 14 both found problems
+  caused by my own fixes (K65; K67). The last of them — splitting continuous from waiting self-tests in
+  carlink's confirmation step — was re-scoped by removal: the step now always requires several days of
+  normal driving with none of the codes back, which is right for every kind of code. The re-scope is
+  pinned by a test and a mutation run instead of a fifteenth round; the residuals are review K68.
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and

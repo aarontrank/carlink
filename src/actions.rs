@@ -317,7 +317,7 @@ pub fn clear_with_history<T: Transport>(a: &mut Adapter<T>, db: &Store, ident: &
         monitors.dedup();
         if !monitors.is_empty() {
             next_steps.push(format!(
-                "Do not call the repair confirmed yet. It is confirmed when a later `carlink scan` shows the {} self-test(s) complete (inspection/readiness) and the code has not come back as pending or stored. That needs normal driving, sometimes several days (EVAP tests need a cold start).",
+                "Do not call the repair confirmed yet. It is confirmed when, after several days of normal driving (city and highway), a later `carlink scan` shows none of these codes back as pending or stored, and the {} self-test(s) complete (inspection/readiness; EVAP tests need a cold start).",
                 monitors.join(", ")
             ));
         }
@@ -484,6 +484,16 @@ mod tests {
         assert_eq!(kind(err), "vehicle_mismatch");
         assert!(!a.transport().log.contains(&"04".to_string()));
         assert!(sessions(&db).is_empty());
+    }
+
+    #[test]
+    fn a_self_test_that_reads_complete_at_once_is_not_offered_as_proof_of_a_repair() {
+        let db = Store::open_in_memory().unwrap();
+        let mut a = Adapter::connect(Sim::from_spec("odyssey-2016:engine-off").unwrap()).unwrap();
+        let out = clear_with_history(&mut a, &db, &ident("odyssey-2016"), &[], None).unwrap();
+        let steps: Vec<&str> = out["next_steps"].as_array().unwrap().iter().filter_map(|s| s.as_str()).collect();
+        let confirm = steps.iter().find(|s| s.contains("confirmed")).expect("a confirmation step");
+        assert!(confirm.contains("after several days of normal driving") && confirm.contains("none of these codes"), "{confirm}");
     }
 
     #[test]
