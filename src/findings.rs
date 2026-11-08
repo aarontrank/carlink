@@ -48,7 +48,98 @@ pub fn is_misfire(code: &str) -> bool {
 
 const MISFIRE_ADVICE: &str = "If the check-engine light is FLASHING, stop driving: a severe misfire overheats and destroys the catalytic converter. Otherwise check the spark plug, ignition coil and injector on the named cylinder.";
 
-pub fn generic(s: &Scan) -> Vec<Finding> {
+const CONTINUOUS: [&str; 3] = ["misfire", "fuel_system", "components"];
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Inspection {
+    /// Would an OBD-based emissions (I/M) inspection most likely pass right now?
+    pub likely_pass: bool,
+    pub reasons: Vec<String>,
+}
+
+fn incomplete_monitors(s: &Scan) -> Vec<&'static str> {
+    let mut v: Vec<&str> = s.monitors.iter().flat_map(|m| m.status.monitors.iter()).filter(|m| m.incomplete).map(|m| m.name).collect();
+    v.sort();
+    v.dedup();
+    v
+}
+
+/// The one readiness rule (US I/M practice; some states are stricter): continuous monitors must be ready;
+/// of the others, MY1996–2000 may have two incomplete and MY2001+ one.
+fn readiness_problems(incomplete: &[&str], model_year: Option<u16>) -> Option<String> {
+    let allowed = if model_year.is_some_and(|y| y <= 2000) { 2 } else { 1 };
+    if let Some(c) = incomplete.iter().find(|m| CONTINUOUS.contains(m)) {
+        return Some(format!("the {c} self-test is not ready"));
+    }
+    let others: Vec<&str> = incomplete.iter().copied().filter(|m| !CONTINUOUS.contains(m)).collect();
+    (others.len() > allowed).then(|| format!("{} self-tests are not ready ({}); at most {allowed} allowed", others.len(), others.join(", ")))
+}
+
+/// US OBD I/M rules of thumb: MIL off, continuous monitors ready, at most one (MY2001+) or two
+/// (MY1996–2000) other monitors incomplete; many states also fail a car with permanent codes.
+pub fn inspection(s: &Scan, model_year: Option<u16>) -> Option<Inspection> {
+    if s.monitors.is_empty() {
+        return None;
+    }
+    let mut reasons = Vec::new();
+    if !s.codes_complete {
+        reasons.push("the trouble-code read was incomplete, so permanent codes may be missing".to_string());
+    }
+    if s.monitors.iter().any(|m| m.status.mil_on) {
+        reasons.push("the check-engine light is on".to_string());
+    }
+    reasons.extend(readiness_problems(&incomplete_monitors(s), model_year));
+    let permanent: Vec<&str> = s.dtcs.iter().filter(|d| d.kind == "permanent").map(|d| d.code.as_str()).collect();
+    if !permanent.is_empty() {
+        reasons.push(format!("permanent code(s) {} (many states fail these until the car clears them itself)", permanent.join(", ")));
+    }
+    Some(Inspection { likely_pass: reasons.is_empty(), reasons })
+}
+
+/// Findings from service 06: misfiring cylinders (by count) and self-tests outside their limits.
+pub fn tests(t: &crate::mode06::Tests) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for m in t.misfire.iter().filter(|m| m.cylinder > 0) {
+        let (cur, avg) = (m.current.unwrap_or(0.0), m.average.unwrap_or(0.0));
+        let sev = if cur >= 100.0 { Severity::Warning } else if cur >= 20.0 || avg >= 50.0 { Severity::Advice } else { continue };
+        out.push(finding(
+            sev,
+            format!("Cylinder {} misfiring", m.cylinder),
+            format!("{cur:.0} misfires this drive; {avg:.0} on average over recent drives (zero is normal; a code typically sets around a few hundred in one drive)."),
+            "Swap this cylinder's ignition coil with a neighbour's, drive, and run `carlink tests` again: if the count moves with the coil, replace the coil; if not, check the spark plug, then the injector and compression.",
+        ));
+    }
+    for r in t.results.iter().filter(|r| r.verdict == "FAIL") {
+        out.push(finding(
+            Severity::Warning,
+            format!("Self-test failing: {} — {}", r.monitor, r.test),
+            format!("Value {} {} is outside its limits (min {}, max {}).", r.value.map(|v| v.to_string()).unwrap_or_default(), r.unit, r.min.map(|v| v.to_string()).unwrap_or("-".into()), r.max.map(|v| v.to_string()).unwrap_or("-".into())),
+            "The car's own test of this system is failing even if no code has set yet; diagnose that system.",
+        ));
+    }
+    out
+}
+
+/// The self-test that must report complete after a repair before a code can be called fixed.
+pub fn monitor_for(code: &str) -> &'static str {
+    match code {
+        c if is_misfire(c) => "misfire",
+        "P0420" | "P0421" | "P0430" | "P0431" => "catalyst",
+        c if ("P0440"..="P0469").contains(&c) || c.starts_with("P145") || c.starts_with("P245") => "evap",
+        "P0135" | "P0141" | "P0147" | "P0155" | "P0161" | "P0167" => "oxygen_sensor_heater",
+        c if ("P0030"..="P0064").contains(&c) => "oxygen_sensor_heater",
+        c if ("P0130"..="P0167").contains(&c) || ("P2195"..="P2199").contains(&c) => "oxygen_sensor",
+        "P0171" | "P0172" | "P0174" | "P0175" => "fuel_system",
+        c if ("P0400"..="P0409").contains(&c) || c.starts_with("P001") || c.starts_with("P002") => "egr_vvt",
+        _ => "components",
+    }
+}
+
+fn f_from_c(c: f64) -> f64 {
+    c * 9.0 / 5.0 + 32.0
+}
+
+pub fn generic(s: &Scan, model_year: Option<u16>) -> Vec<Finding> {
     let mut out = Vec::new();
     if s.monitors.iter().any(|m| m.status.mil_on) {
         out.push(finding(Severity::Warning, "Check-engine light (MIL) is on", "An emissions-related fault is confirmed.", "Read the codes below; clear them only after the cause is fixed."));
@@ -87,13 +178,16 @@ pub fn generic(s: &Scan) -> Vec<Finding> {
         });
     }
 
-    let mut incomplete: Vec<&str> = s.monitors.iter().flat_map(|m| m.status.monitors.iter()).filter(|m| m.incomplete).map(|m| m.name).collect();
-    incomplete.sort();
-    incomplete.dedup();
+    let incomplete = incomplete_monitors(s);
     if !incomplete.is_empty() {
-        let sev = if incomplete.len() > 1 { Severity::Advice } else { Severity::Info };
-        out.push(finding(sev, "Readiness monitors incomplete", format!("Not ready: {}.", incomplete.join(", ")),
-            "Normal after codes are cleared or the battery is disconnected; complete them with mixed driving. A 2001+ car fails an emissions inspection with more than one incomplete."));
+        let fails = readiness_problems(&incomplete, model_year).is_some();
+        let (sev, verdict) = if fails {
+            (Severity::Advice, "As things stand the car would NOT pass an emissions (I/M) inspection.")
+        } else {
+            (Severity::Info, "Within the usual inspection allowance, but some states are stricter.")
+        };
+        out.push(finding(sev, "Readiness monitors incomplete", format!("Not ready: {}. {verdict}", incomplete.join(", ")),
+            "Normal after codes are cleared or the battery is disconnected; they complete with a few days of mixed city and highway driving. Re-scan before an inspection."));
     }
 
     let running = live(s, "rpm").is_some_and(|r| r > 400.0);
@@ -104,20 +198,20 @@ pub fn generic(s: &Scan) -> Vec<Finding> {
             out.push(finding(Severity::Info, "Charging voltage on the low side", format!("{v:.1} V with the engine running."), "Often normal: Honda (and other) charging control lowers the voltage at light load. Turn on the headlights and blower; it should rise above 13.5 V. If it does not, test the alternator."));
         } else if running && v > 15.0 {
             out.push(finding(Severity::Warning, "Charging voltage high", format!("{v:.1} V with the engine running."), "Over-charging damages the battery and electronics; have the regulator/alternator checked."));
-        } else if !running && v < 12.2 {
+        } else if !running && v <= 12.2 {
             out.push(finding(Severity::Warning, "12 V battery weak", format!("{v:.1} V at rest (healthy is 12.6+)."), "Charge and load-test the 12 V battery; check for parasitic drain."));
-        } else if !running && v < 12.4 {
+        } else if !running && v <= 12.4 {
             out.push(finding(Severity::Advice, "12 V battery partly discharged", format!("{v:.1} V at rest."), "Drive or charge it, then re-check after the car has rested a few hours."));
         }
     }
 
     if let Some(c) = live(s, "coolant_temp") {
         if c > 110.0 {
-            out.push(finding(Severity::Critical, "Engine overheating", format!("Coolant {c:.0} °C."), "Stop driving. Check coolant level (engine cold), fan operation and for leaks."));
+            out.push(finding(Severity::Critical, "Engine overheating", format!("Coolant {c:.0} °C ({:.0} °F).", f_from_c(c)), "Stop driving. Check coolant level (engine cold), fan operation and for leaks."));
         } else if c > 104.0 {
-            out.push(finding(Severity::Warning, "Coolant temperature high", format!("Coolant {c:.0} °C (normal 88–104)."), "Watch the gauge; check coolant level and radiator fan."));
+            out.push(finding(Severity::Warning, "Coolant temperature high", format!("Coolant {c:.0} °C ({:.0} °F); normal is 88–104 °C (190–220 °F).", f_from_c(c)), "Watch the gauge; check coolant level and radiator fan."));
         } else if c < 80.0 && live(s, "run_time").is_some_and(|t| t > 900.0) {
-            out.push(finding(Severity::Advice, "Engine not warming up — possible stuck-open thermostat", format!("Coolant {c:.0} °C after {:.0} min running.", live(s, "run_time").unwrap_or(0.0) / 60.0), "Usually a thermostat; it hurts fuel economy and heater output (often sets P0128)."));
+            out.push(finding(Severity::Advice, "Engine not warming up — possible stuck-open thermostat", format!("Coolant {c:.0} °C ({:.0} °F) after {:.0} min running.", f_from_c(c), live(s, "run_time").unwrap_or(0.0) / 60.0), "Usually a thermostat; it hurts fuel economy and heater output (often sets P0128)."));
         }
     }
 
@@ -139,9 +233,12 @@ pub fn generic(s: &Scan) -> Vec<Finding> {
     }
 
     if let Some(d) = live(s, "distance_with_mil").filter(|d| *d > 0.0) {
-        out.push(finding(Severity::Info, "Driven with the check-engine light on", format!("{d:.0} km since the MIL came on."), "Long distances with a misfire can damage the catalytic converter."));
+        out.push(finding(Severity::Info, "Driven with the check-engine light on", format!("{:.0} miles ({d:.0} km) since the MIL came on.", d * 0.621371), "Long distances with a misfire can damage the catalytic converter."));
     }
-    if !s.errors.is_empty() {
+    if !s.codes_complete {
+        // First of the warnings (the caller's sort is stable): every other conclusion depends on it.
+        out.insert(0, finding(Severity::Warning, "Trouble-code read INCOMPLETE", s.errors.join("; "), "Some codes may be missing from this report. Run `carlink scan` again before drawing conclusions or clearing anything."));
+    } else if !s.errors.is_empty() {
         out.push(finding(Severity::Info, "Scan incomplete", s.errors.join("; "), "Re-run with the ignition on; some modules may not support every request."));
     }
     out
@@ -170,7 +267,7 @@ mod tests {
     }
 
     fn titles(s: &Scan) -> Vec<(Severity, String)> {
-        generic(s).into_iter().map(|f| (f.severity, f.title)).collect()
+        generic(s, None).into_iter().map(|f| (f.severity, f.title)).collect()
     }
 
     fn has(s: &Scan, sev: Severity, needle: &str) -> bool {
@@ -178,14 +275,46 @@ mod tests {
     }
 
     #[test]
+    fn inspection_verdict_follows_the_us_rules() {
+        let odyssey = scan(&mut Adapter::connect(Sim::new("odyssey-2016").unwrap()).unwrap()).unwrap();
+        let i = inspection(&odyssey, Some(2016)).unwrap();
+        assert!(!i.likely_pass);
+        assert!(i.reasons.iter().any(|r| r.contains("check-engine light")));
+        assert!(i.reasons.iter().any(|r| r.contains("permanent")));
+        let mut clean = odyssey.clone();
+        clean.dtcs.clear();
+        clean.monitors[0].status = crate::obd::decode_monitor_status(&[0, 0x07, 0xE5, 0x04]).unwrap();
+        assert!(inspection(&clean, Some(2016)).unwrap().likely_pass, "one incomplete non-continuous monitor is allowed");
+        assert!(inspection(&base(), None).is_none_or(|i| i.likely_pass));
+    }
+
+    #[test]
+    fn an_incomplete_code_read_cannot_be_a_likely_pass() {
+        let mut s = base();
+        s.monitors.push(crate::scan::EcuMonitors { ecu: "7E8".into(), status: crate::obd::decode_monitor_status(&[0, 0x07, 0x25, 0x00]).unwrap() });
+        s.codes_complete = false;
+        assert!(!inspection(&s, Some(2016)).unwrap().likely_pass);
+    }
+
+    #[test]
+    fn repaired_codes_map_to_the_self_test_that_proves_them() {
+        assert_eq!(monitor_for("P0303"), "misfire");
+        assert_eq!(monitor_for("P0420"), "catalyst");
+        assert_eq!(monitor_for("P1457"), "evap");
+        assert_eq!(monitor_for("P0171"), "fuel_system");
+        assert_eq!(monitor_for("P0141"), "oxygen_sensor_heater");
+        assert_eq!(monitor_for("P0700"), "components");
+    }
+
+    #[test]
     fn healthy_scan_has_no_findings() {
-        assert!(generic(&base()).is_empty());
+        assert!(generic(&base(), None).is_empty());
     }
 
     #[test]
     fn odyssey_dtcs_mil_and_readiness() {
         let s = scan(&mut Adapter::connect(Sim::new("odyssey-2016").unwrap()).unwrap()).unwrap();
-        let f = generic(&s);
+        let f = generic(&s, None);
         assert!(f.iter().any(|x| x.severity == Severity::Warning && x.title.contains("Check-engine light")));
         let p0303 = f.iter().find(|x| x.code.as_deref() == Some("P0303")).unwrap();
         assert_eq!(p0303.severity, Severity::Warning);
@@ -214,10 +343,50 @@ mod tests {
     fn two_incomplete_monitors_flag_inspection() {
         let mut s = base();
         s.monitors.push(crate::scan::EcuMonitors { ecu: "7E8".into(), status: crate::obd::decode_monitor_status(&[0, 0x07, 0x25, 0x21]).unwrap() });
-        let f = generic(&s);
+        let f = generic(&s, None);
         let r = f.iter().find(|x| x.title.contains("Readiness")).unwrap();
         assert_eq!(r.severity, Severity::Advice);
         assert!(r.recommendation.contains("inspection"));
+    }
+
+    #[test]
+    fn an_incomplete_continuous_monitor_fails_inspection() {
+        let mut s = base();
+        s.monitors.push(crate::scan::EcuMonitors { ecu: "7E8".into(), status: crate::obd::decode_monitor_status(&[0, 0x17, 0x25, 0x00]).unwrap() });
+        let f = generic(&s, Some(2016));
+        assert_eq!(f[0].severity, Severity::Advice);
+        assert!(f[0].detail.contains("NOT pass"));
+    }
+
+    #[test]
+    fn older_cars_may_have_two_incomplete_monitors() {
+        let mut s = base();
+        s.monitors.push(crate::scan::EcuMonitors { ecu: "7E8".into(), status: crate::obd::decode_monitor_status(&[0, 0x07, 0x25, 0x05]).unwrap() });
+        assert_eq!(generic(&s, Some(2000))[0].severity, Severity::Info);
+        assert_eq!(generic(&s, Some(2004))[0].severity, Severity::Advice);
+    }
+
+    #[test]
+    fn exactly_12_2_volts_at_rest_is_weak() {
+        let mut s = base();
+        s.battery_voltage = Some(12.2);
+        assert!(has(&s, Severity::Warning, "battery"));
+    }
+
+    #[test]
+    fn incomplete_code_read_is_a_warning() {
+        let mut s = base();
+        s.codes_complete = false;
+        s.errors.push("stored codes: adapter error: CAN ERROR".into());
+        assert!(has(&s, Severity::Warning, "INCOMPLETE"));
+    }
+
+    #[test]
+    fn temperatures_and_distances_are_also_in_us_units() {
+        let s = with(base(), 0x05, &[40 + 112]);
+        assert!(generic(&s, None)[0].detail.contains("°F"));
+        let s = with(base(), 0x21, &[0x00, 0x64]);
+        assert!(generic(&s, None)[0].detail.contains("miles"));
     }
 
     #[test]
@@ -231,11 +400,12 @@ mod tests {
     fn same_monitor_from_two_ecus_counts_once() {
         let mut s = base();
         for ecu in ["7E8", "7E9"] {
-            s.monitors.push(crate::scan::EcuMonitors { ecu: ecu.into(), status: crate::obd::decode_monitor_status(&[0, 0x44, 0, 0]).unwrap() });
+            s.monitors.push(crate::scan::EcuMonitors { ecu: ecu.into(), status: crate::obd::decode_monitor_status(&[0, 0x00, 0x04, 0x04]).unwrap() });
         }
-        let f = generic(&s);
+        let f = generic(&s, None);
         let r = f.iter().find(|x| x.title.contains("Readiness")).unwrap();
-        assert_eq!((r.severity, r.detail.as_str()), (Severity::Info, "Not ready: components."));
+        assert_eq!(r.severity, Severity::Info);
+        assert!(r.detail.starts_with("Not ready: evap."), "{}", r.detail);
     }
 
     #[test]
@@ -265,7 +435,7 @@ mod tests {
         let mut s = with(base(), 0x0C, &[0x0B, 0x40]);
         s.battery_voltage = Some(12.9);
         assert!(has(&s, Severity::Info, "Charging voltage on the low side"));
-        assert!(generic(&s)[0].recommendation.contains("13.5"));
+        assert!(generic(&s, None)[0].recommendation.contains("13.5"));
     }
 
     #[test]
@@ -289,14 +459,14 @@ mod tests {
     fn non_misfire_p031x_codes_do_not_get_misfire_advice() {
         let mut s = base();
         s.dtcs.push(crate::scan::Dtc { code: "P0315".into(), kind: "stored", ecu: "7E8".into() });
-        assert!(!generic(&s)[0].recommendation.to_lowercase().contains("flashing"));
+        assert!(!generic(&s, None)[0].recommendation.to_lowercase().contains("flashing"));
     }
 
     #[test]
     fn misfire_codes_carry_the_flashing_light_warning() {
         let mut s = base();
         s.dtcs.push(crate::scan::Dtc { code: "P0302".into(), kind: "stored", ecu: "7E8".into() });
-        let f = generic(&s);
+        let f = generic(&s, None);
         assert!(f[0].recommendation.to_lowercase().contains("flashing"), "{}", f[0].recommendation);
     }
 

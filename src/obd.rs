@@ -87,7 +87,7 @@ const PIDS: &[(u8, &str, &str, &str, usize, Formula)] = &[
     (0x4D, "time_with_mil", "Time run with MIL on", "min", 2, |d| d[0] * 256.0 + d[1]),
     (0x4E, "time_since_clear", "Time since codes cleared", "min", 2, |d| d[0] * 256.0 + d[1]),
     (0x5A, "pedal_relative", "Relative accelerator pedal position", "%", 1, |d| d[0] * 100.0 / 255.0),
-    (0x5B, "hybrid_battery_life", "Hybrid/EV battery pack remaining life", "%", 1, |d| d[0] * 100.0 / 255.0),
+    (0x5B, "hybrid_battery_charge", "Hybrid/EV battery state of charge (not its health)", "%", 1, |d| d[0] * 100.0 / 255.0),
     (0x5C, "oil_temp", "Engine oil temperature", "°C", 1, |d| d[0] - 40.0),
     (0x5E, "fuel_rate", "Engine fuel rate", "L/h", 2, |d| (d[0] * 256.0 + d[1]) / 20.0),
     (0xA6, "odometer", "Odometer", "km", 4, |d| ((d[0] * 256.0 + d[1]) * 256.0 + d[2]) * 25.6 + d[3] / 10.0),
@@ -125,11 +125,19 @@ fn fuel_system_text(a: u8) -> Option<&'static str> {
 fn fuel_type_text(a: u8) -> Option<&'static str> {
     Some(match a {
         1 => "gasoline",
+        2 => "methanol",
+        3 => "ethanol",
         4 => "diesel",
+        5 => "LPG",
+        6 => "CNG",
         8 => "electric",
-        11 => "hybrid gasoline",
-        15 => "hybrid electric and combustion",
-        16 => "hybrid regenerative",
+        9..=16 => "bi-fuel",
+        17 => "hybrid gasoline",
+        18 => "hybrid ethanol",
+        19 => "hybrid diesel",
+        20 => "hybrid electric",
+        21 => "hybrid running electric and combustion",
+        22 => "hybrid regenerative",
         _ => return None,
     })
 }
@@ -206,7 +214,8 @@ pub struct MonitorStatus {
     pub monitors: Vec<Monitor>,
 }
 
-const SPARK: [&str; 8] = ["catalyst", "heated_catalyst", "evap", "secondary_air", "ac_refrigerant", "oxygen_sensor", "oxygen_sensor_heater", "egr_vvt"];
+// Bit 4 was "A/C refrigerant" in early J1979 and is the gasoline particulate filter in current editions.
+const SPARK: [&str; 8] = ["catalyst", "heated_catalyst", "evap", "secondary_air", "gpf_or_ac", "oxygen_sensor", "oxygen_sensor_heater", "egr_vvt"];
 const COMPRESSION: [&str; 8] = ["nmhc_catalyst", "nox_scr", "reserved", "boost_pressure", "reserved", "exhaust_gas_sensor", "pm_filter", "egr_vvt"];
 
 /// Service 01 PID 01, bytes A–D (SAE J1979).
@@ -366,7 +375,9 @@ mod tests {
     fn signed_and_offset_pids() {
         assert_eq!(all(0x32, &[0xFF, 0xFC]), vec![("evap_vapor_pressure".to_string(), -1.0)]);
         assert_eq!(all(0x3C, &[0x1F, 0x40]), vec![("cat_temp_b1s1".to_string(), 760.0)]);
-        assert_eq!(all(0x5B, &[0xFF]), vec![("hybrid_battery_life".to_string(), 100.0)]);
+        assert_eq!(all(0x5B, &[0xFF]), vec![("hybrid_battery_charge".to_string(), 100.0)]);
+        assert_eq!(decode_pid_all(0x51, &[17])[0].text, Some("hybrid gasoline"));
+        assert_eq!(decode_pid_all(0x51, &[11])[0].text, Some("bi-fuel"));
     }
 
     #[test]

@@ -31,8 +31,40 @@ fn table() -> &'static HashMap<&'static str, String> {
     })
 }
 
+/// A code as the person read it → normalised `P0420`, or why it is not a code.
+pub fn parse(code: &str) -> std::result::Result<String, String> {
+    let c = code.trim().to_uppercase().replace(['-', ' '], "");
+    if !c.is_ascii() {
+        return Err(format!("'{code}' is not a trouble code: expected a letter P, C, B or U followed by four digits/letters, e.g. P0420"));
+    }
+    let c = c.get(..5).filter(|_| c.len() == 5 || c.len() == 7).unwrap_or(&c).to_string();
+    let b = c.as_bytes();
+    let ok = b.len() == 5 && matches!(b[0], b'P' | b'C' | b'B' | b'U') && (b'0'..=b'3').contains(&b[1]) && b[2..].iter().all(u8::is_ascii_hexdigit);
+    if ok {
+        Ok(c)
+    } else if c.len() == 5 && c[1..].contains('O') {
+        Err(format!("'{code}' is not a trouble code: it has the letter O where a zero belongs (try {}{})", &c[..1], c[1..].replace('O', "0")))
+    } else {
+        Err(format!("'{code}' is not a trouble code: expected a letter P, C, B or U followed by four digits/letters, e.g. P0420"))
+    }
+}
+
+/// SAE J2012: P1, P30–P33, and B/C/U 1 and 2 are manufacturer-controlled ranges.
+fn manufacturer_range(code: &str) -> bool {
+    let b = code.as_bytes();
+    match (b[0], b[1], b[2]) {
+        (b'P', b'1', _) => true,
+        (b'P', b'3', d) => (b'0'..=b'3').contains(&d),
+        (b'B' | b'C' | b'U', d, _) => matches!(d, b'1' | b'2'),
+        _ => false,
+    }
+}
+
 fn system(code: &str) -> &'static str {
     let b = code.as_bytes();
+    if b.first() == Some(&b'P') && b.get(2) == Some(&b'0') {
+        return "Fuel and air metering and auxiliary emission controls";
+    }
     match (b.first(), b.get(2)) {
         (Some(b'B'), _) => "Body",
         (Some(b'C'), _) => "Chassis",
@@ -48,16 +80,13 @@ fn system(code: &str) -> &'static str {
     }
 }
 
+/// `code` must already be a valid 5-character code (see `parse`); a UDS suffix like `-00` is ignored.
 pub fn lookup(code: &str) -> DtcInfo {
     let code = code.trim().to_uppercase();
-    let description = table().get(code.as_str()).cloned();
-    DtcInfo {
-        system: system(&code),
-        // J2012: second character 0 or 2 is SAE-generic; any code in the generic table counts as generic.
-        manufacturer_specific: description.is_none() && !matches!(code.as_bytes().get(1), Some(b'0' | b'2')),
-        description,
-        code,
-    }
+    let base = code.get(..5).unwrap_or(&code);
+    let manufacturer_specific = base.len() == 5 && manufacturer_range(base);
+    let description = if manufacturer_specific { None } else { table().get(base).cloned() };
+    DtcInfo { system: system(base), manufacturer_specific, description, code }
 }
 #[cfg(test)]
 mod tests {
@@ -93,6 +122,27 @@ mod tests {
         assert_eq!(lookup("P0700").system, "Transmission");
         assert_eq!(lookup("P0505").system, "Vehicle speed, idle control and auxiliary inputs");
         assert_eq!(lookup("P0D00").system, "Unknown");
+    }
+
+    #[test]
+    fn parse_accepts_codes_and_explains_typos() {
+        assert_eq!(parse(" p0420 ").unwrap(), "P0420");
+        assert_eq!(parse("C1611-00").unwrap(), "C1611");
+        assert!(parse("PO420").unwrap_err().contains("letter O"));
+        assert!(parse("0420").is_err());
+        assert!(parse("P5420").is_err());
+        assert!(parse("ÉO42").is_err());
+    }
+
+    #[test]
+    fn j2012_manufacturer_ranges() {
+        assert!(lookup("P1457").manufacturer_specific);
+        assert!(lookup("P3000").manufacturer_specific);
+        assert!(!lookup("P3400").manufacturer_specific);
+        assert!(lookup("U2100").manufacturer_specific);
+        assert!(lookup("C1611").manufacturer_specific);
+        assert!(!lookup("U0100").manufacturer_specific);
+        assert_eq!(lookup("P0011").system, "Fuel and air metering and auxiliary emission controls");
     }
 
     #[test]

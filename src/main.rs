@@ -83,6 +83,12 @@ enum Cmd {
         #[arg(long, default_value_t = 500)]
         interval_ms: u64,
     },
+    /// The car's own self-test results (OBD service 06): per-cylinder misfire counts on CAN cars, and each
+    /// monitor's test values with pass/FAIL against its limits. Read it BEFORE clearing (a clear zeroes it).
+    Tests {
+        #[arg(long)]
+        vehicle: Option<String>,
+    },
     /// Describe a trouble code (generic SAE meaning plus vehicle notes).
     Dtc {
         code: String,
@@ -128,8 +134,10 @@ enum HistoryCmd {
     Trend { vehicle: String, key: String },
     /// Reading keys recorded for a vehicle.
     Keys { vehicle: String },
-    /// Every trouble code ever seen on a vehicle, with first/last seen.
+    /// Every trouble code ever seen on a vehicle, with first/last seen and whether it is set now.
     Dtcs { vehicle: String },
+    /// What changed between two sessions (e.g. last visit → today): codes new/gone/still set, readings.
+    Compare { from: i64, to: i64 },
 }
 
 fn transport(port: Option<&str>) -> Result<Box<dyn Transport>> {
@@ -149,10 +157,13 @@ fn connect(port: Option<&str>) -> Result<Adapter<Box<dyn Transport>>> {
     Adapter::connect(transport(port)?)
 }
 
-fn store(db: Option<PathBuf>) -> Result<Store> {
+/// The real history, or — when the simulator is in use and no --db was given — a separate practice file,
+/// so rehearsal scans never appear in a car's history.
+fn store(db: Option<PathBuf>, port: Option<&str>) -> Result<Store> {
+    let file = if port.is_some_and(|p| p.starts_with("sim:")) { "simulator.db" } else { "carlink.db" };
     let path = match db {
         Some(p) => p,
-        None => PathBuf::from(std::env::var("HOME").context("HOME not set")?).join(".local/share/carlink/carlink.db"),
+        None => PathBuf::from(std::env::var("HOME").context("HOME not set")?).join(".local/share/carlink").join(file),
     };
     Store::open(&path)
 }
@@ -208,7 +219,7 @@ fn run(cli: Cli) -> Result<Value> {
         Cmd::Scan { vehicle, vin, vin_no_check, odometer_mi, note, no_save } => {
             profile(vehicle.as_deref())?;
             let vin = checked_vin(vin.as_deref(), vin_no_check)?;
-            let db = if no_save { None } else { Some(store(cli.db)?) };
+            let db = if no_save { None } else { Some(store(cli.db, port)?) };
             let mut a = connect(port)?;
             let r = report::build(&mut a, &Ident { vehicle: vehicle.as_deref(), vin: vin.as_deref() })?;
             let session_id = match (db, &r.vehicle_key) {
@@ -229,7 +240,7 @@ fn run(cli: Cli) -> Result<Value> {
             }
             profile(vehicle.as_deref())?;
             let vin = checked_vin(vin.as_deref(), vin_no_check)?;
-            let db = store(cli.db)?;
+            let db = store(cli.db, port)?;
             let mut a = connect(port)?;
             actions::clear_with_history(&mut a, &db, &Ident { vehicle: vehicle.as_deref(), vin: vin.as_deref() }, &only, note)?
         }
@@ -237,12 +248,25 @@ fn run(cli: Cli) -> Result<Value> {
             let flagged = profile(vehicle.as_deref())?;
             let mut a = connect(port)?;
             let p = flagged.or_else(|| carlink::scan::vin(&mut a).ok().flatten().as_deref().and_then(vehicles::detect));
-            json!(carlink::watch::watch(&mut a, p, &keys, samples, std::time::Duration::from_millis(interval_ms))?)
+            let mut v = json!(carlink::watch::watch(&mut a, p, &keys, samples, std::time::Duration::from_millis(interval_ms))?);
+            v["simulated"] = json!(a.info().simulated);
+            v
+        }
+        Cmd::Tests { vehicle } => {
+            let flagged = profile(vehicle.as_deref())?;
+            let mut a = connect(port)?;
+            let p = flagged.or_else(|| carlink::scan::vin(&mut a).ok().flatten().as_deref().and_then(vehicles::detect));
+            let t = carlink::mode06::read(&mut a, p.map(|p| p.id));
+            let mut v = json!(t);
+            v["findings"] = json!(carlink::findings::tests(&t));
+            v["simulated"] = json!(a.info().simulated);
+            v
         }
         Cmd::Dtc { code, vehicle } => {
             let p = profile(vehicle.as_deref())?;
+            let code = dtc::parse(&code).map_err(|e| problem("bad_input", e, "Ask the person to read the code again, character by character (the second character is always a digit 0–3)."))?;
             let mut v = serde_json::to_value(dtc::lookup(&code))?;
-            v["vehicle_notes"] = json!(p.and_then(|p| vehicles::dtc_note(p, &code.to_uppercase())));
+            v["vehicle_notes"] = json!(p.and_then(|p| vehicles::dtc_note(p, &code)));
             v
         }
         Cmd::Vehicles => json!(vehicles::PROFILES),
@@ -266,7 +290,7 @@ fn run(cli: Cli) -> Result<Value> {
                 "ecu": m.ecu, "hex": m.data.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ")})).collect::<Vec<_>>()})
         }
         Cmd::History { cmd } => {
-            let db = store(cli.db)?;
+            let db = store(cli.db, port)?;
             match cmd {
                 HistoryCmd::Vehicles => json!(db.vehicles()?),
                 HistoryCmd::Sessions { vehicle, limit } => json!(db.sessions(vehicle.as_deref(), limit)?),
@@ -274,6 +298,7 @@ fn run(cli: Cli) -> Result<Value> {
                 HistoryCmd::Trend { vehicle, key } => json!({"vehicle": vehicle, "key": key, "points": db.trend(&vehicle, &key)?}),
                 HistoryCmd::Keys { vehicle } => json!(db.keys(&vehicle)?),
                 HistoryCmd::Dtcs { vehicle } => json!(db.dtc_history(&vehicle)?),
+                HistoryCmd::Compare { from, to } => json!(db.compare(from, to)?.ok_or_else(|| problem("not_found", format!("session {from} or {to} does not exist"), "Run `carlink history sessions --vehicle <key>` to list session ids."))?),
             }
         }
     })

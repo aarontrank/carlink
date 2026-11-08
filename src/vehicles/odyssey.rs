@@ -63,3 +63,19 @@ pub const PROFILE: Profile = Profile {
     ],
     vin: &[("5FNRL5", 'G', None)],
 };
+
+/// Misfire counts concentrated on cylinders 1–3 (the bank VCM deactivates) match the oil-fouling pattern
+/// behind warranty extension 25-061 (wiki `honda-mode06`).
+pub fn vcm_pattern(tests: Option<&crate::mode06::Tests>) -> Option<crate::findings::Finding> {
+    let t = tests?;
+    let count = |c: u8| t.misfire.iter().find(|m| m.cylinder == c).map(|m| m.current.unwrap_or(0.0).max(m.average.unwrap_or(0.0))).unwrap_or(0.0);
+    let rear: f64 = (1..=3).map(count).sum();
+    let front: f64 = (4..=6).map(count).sum();
+    (rear >= 20.0 && rear > 3.0 * front).then(|| crate::findings::Finding {
+        severity: crate::findings::Severity::Advice,
+        code: None,
+        title: "Misfires match the VCM pattern (cylinders 1–3)".into(),
+        detail: format!("Cylinders 1–3 (the bank VCM shuts off) account for most misfire counts: {rear:.0} vs {front:.0} on cylinders 4–6."),
+        recommendation: VCM_MISFIRE.into(),
+    })
+}

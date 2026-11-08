@@ -280,11 +280,23 @@ pub fn clear_with_history<T: Transport>(a: &mut Adapter<T>, db: &Store, ident: &
         }
     };
     let mut next_steps = next_steps(status, &results, before.vehicle);
+    if status == "cleared" && targets.iter().any(|t| matches!(t, Target::Engine)) {
+        let mut monitors: Vec<&str> = before.codes.iter().filter(|c| c.kinds.iter().any(|k| *k != "permanent")).map(|c| crate::findings::monitor_for(&c.code)).collect();
+        monitors.sort();
+        monitors.dedup();
+        if !monitors.is_empty() {
+            next_steps.push(format!(
+                "Do not call the repair confirmed yet. It is confirmed when a later `carlink scan` shows the {} self-test(s) complete (inspection/readiness) and the code has not come back as pending or stored. That needs normal driving, sometimes several days (EVAP tests need a cold start).",
+                monitors.join(", ")
+            ));
+        }
+    }
     if targets.iter().any(|t| matches!(t, Target::Engine)) && !engine_has_codes(&before) {
         next_steps.insert(0, "There were no engine codes before the clear: it only reset the readiness monitors (and, on Hondas, learned idle values).".into());
     }
     Ok(json!({
         "clear_status": status,
+        "simulated": before.summary.simulated,
         "next_steps": next_steps,
         "vehicle": identity(&before),
         "targets": results,
@@ -456,6 +468,7 @@ mod tests {
         assert_eq!(out["targets"][0]["acknowledged_by"], json!(["10"]));
         assert_eq!(out["vehicle"]["key"], CRV_VIN);
         assert!(out["next_steps"].as_array().unwrap().iter().any(|s| s.as_str().unwrap().contains("idle learn")));
+        assert!(out["next_steps"].as_array().unwrap().iter().any(|s| s.as_str().unwrap().contains("catalyst, evap")), "{out}");
         let s = db.sessions(None, 5).unwrap();
         assert_eq!(s.iter().map(|x| (x.kind.as_str(), x.vehicle.as_str())).collect::<Vec<_>>(), vec![("clear", CRV_VIN), ("pre-clear", CRV_VIN)]);
     }

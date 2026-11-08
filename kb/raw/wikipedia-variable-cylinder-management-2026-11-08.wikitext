@@ -1,0 +1,58 @@
+<!-- source_url: https://en.wikipedia.org/wiki/Variable_Cylinder_Management (action=raw) | fetched: 2026-11-08 | license: CC BY-SA 4.0 -->
+{{Short description|Engine fuel economy system}}
+'''Variable Cylinder Management''' ('''VCM''') is [[Honda]]'s term for its [[variable displacement]] technology, which saves fuel by deactivating the rear bank of 3 [[cylinder (engine)|cylinder]]s during specific [[driving]] conditions—for example, [[highway]] driving. It was first introduced in the 2003 [[Honda Inspire]] sedan.<ref>{{cite web|publisher=Honda Worldwide | work = News Releases | title = Honda Announces a Full Model Change for the Inspire | date = June 18, 2003|url=http://world.honda.com/news/2003/4030618_2.html|url-status=dead|archive-url=https://web.archive.org/web/20141230004825/http://world.honda.com/news/2003/4030618_2.html|archive-date=2014-12-30}}</ref> The second version of VCM (VCM-2) took this a step further, allowing the engine to go from 6 cylinders, down to 4 or 3 during cruising and deceleration. This version had an "ECO" indicator light on the dashboard.<ref>{{Cite web |date=2007-09-20 |title=2008 Honda Odyssey Showcases a Freshened Style with New Premium Features; Newest Version of Variable Cylinder Management Technology Introduced |url=https://hondanews.com/en-US/releases/release-b2abd750992de3f70510ab004c34bdee-2008-honda-odyssey-showcases-a-freshened-style-with-new-premium-features-newest-version-of-variable-cylinder-management-technology-introduced |access-date=2025-03-26 |website=Honda Newsroom |language=en}}</ref> The most recent version of VCM (VCM-3) reverted to the previous 3- and 6-cylinder operation.
+
+Unlike the [[pushrod engine|pushrod]] systems used by [[DaimlerChrysler]]'s [[Multi-Displacement System]] and [[General Motors Corporation|General Motors]]' [[Active Fuel Management]], Honda's VCM uses [[overhead cam]]s. A [[solenoid]] unlocks the [[Tappet|cam followers]] on one bank from their respective [[rocker arm|rockers]], so the cam follower floats freely while the [[poppet valve|valve springs]] keep the valves closed. The system operates through controlling the flow of hydraulic engine oil pressure to locking mechanisms in the cam followers. The engine's [[drive by wire]] throttle allows the engine management computer to smooth out the engine's power delivery, making the system nearly imperceptible on some vehicles. When the VCM system disables cylinders, an "ECO" indicator lights on the dashboard, Active Noise Cancellation (ANC) pumps an opposite-phase sound through the audio speakers to reduce cabin noise, and Active Control Engine Mount (ACM) systems reduce vibration.
+
+== Problems ==
+The VCM hydraulic circuit control is defaulted open, meaning that the engine has to build up enough oil pressure on initial startup to disable the rear bank of cylinders. A single solenoid on the rear camshaft is activated to close oil pressure to unlock the cam followers, thereby closing the valves. In theory, the closing of all rear bank valves produces an ‘air spring’ effect. However, the reciprocating effect of the piston with closed valves reportedly produces a vacuum condition where oil can get pulled past the piston rings to flood the cylinder. When VCM disengages, the engine then misfires if needing to clear the cylinder of oil. This unique type of oil consumption has led to premature failure of parts like spark plugs, catalytic converters, engine mounts, pistons/rings, and cylinder walls. Newer versions of VCM have been developed to improve system reliability but consumers continue to log complaints.{{Citation needed|reason=This whole paragraph makes sense, but needs sources|date=July 2023}}
+
+Owners of vehicles equipped with VCM frequently face vibration problems due to engine motor mount malfunction while ECO mode is enabled.<ref>{{Cite web |title=Vibration on ECO mode |url=http://www.odyclub.com/forums/8-general-discussion/152452-vibration-eco-mode.html |access-date=2018-04-12 |website=www.odyclub.com}}</ref> Instead of replacing motor mounts, owners often override the VCM with a bypass mechanism, such as an in-line resistor based temperature override module. This has the effect of the vehicle computer believing that a sufficient engine temperature to enable VCM has not been reached. While this cannot guarantee that VCM will be disabled (e.g. differing climates/load scenarios), it can generally keep VCM from engaging under normal driving conditions. More advanced VCM disabler systems include a variable-resistance potentiometer<ref>{{Cite web |title=HOW IT WORKS |url=https://www.vcmtuner.com/pages/vcmtuner-how-it-works |access-date=2023-11-18 |website=VCMTUNER}}</ref> or a microcontroller<ref>{{Cite web |title=S-VCM Controller - Disable VCM / deactivate VCM and stop ECO in Honda Acura |url=https://www.svcmcontroller.com/ |access-date=2023-11-18 |website=www.svcmcontroller.com}}</ref> to manually or automatically adjust the resistance according to different conditions, which makes it possible to fully disable the VCM system, though at a somewhat higher cost.
+
+== Lawsuit ==
+In a 2012 class-action lawsuit, Soto et al v. American Honda Motor Co., Inc., plaintiffs Vince Eagen and Alex Soto alleged that certain Honda vehicles had a systemic design defect that resulted in vehicles burning motor oil at a faster rate than intended, engine misfire symptoms and conditions, and premature spark plug fouling<ref>{{Cite web |title=Soto et al v. American Honda Motor Co., Inc., No. 3:2012cv01377 - Document 44 (N.D. Cal. 2012) |url=https://law.justia.com/cases/federal/district-courts/california/candce/3:2012cv01377/253875/44/ |access-date=2025-03-12 |website=Justia Law |language=en}}</ref><ref>{{Cite web |date=2015-04-24 |title=Client Settlement Site > Frequently Asked Questions |url=http://settlement-claims.com/enginemisfire/FrequentlyAskedQuestions.html |access-date=2025-03-27 |archive-url=https://web.archive.org/web/20150424134704/http://settlement-claims.com/enginemisfire/FrequentlyAskedQuestions.html |archive-date=24 April 2015 }}</ref>
+
+In 2013, Honda agreed to settle the lawsuit involving 1.6 million vehicles with V-6 engines with VCM technology.<ref>{{Cite web |date=2013-10-22 |title=Honda Agrees to Settle Engine Class-Action Lawsuit |url=https://www.gardnerweb.com/news/honda-agrees-to-settle-engine-class-action-lawsuit |access-date=2025-03-11 |website=www.gardnerweb.com |language=en}}</ref><ref>{{Cite web |last=Rossab|first=Jeffrey N|date=2013-10-23 |title=Honda settles class-action lawsuit over oil-burning V6s |url=https://www.autoblog.com/news/honda-settles-class-action-lawsuit-engines |access-date=2025-03-11 |website=Autoblog: Car News, Reviews and Buying Guides |language=en}}</ref> The Settlement between Honda and more than 1.87 million consumers<ref>{{Cite web |last=Mirando |first=Sarah |date=2014-04-09 |title=Honda Engine Misfire Class Action Settlement Gets Final OK |url=https://topclassactions.com/lawsuit-settlements/lawsuit-news/honda-engine-misfire-class-action-settlement-gets-final-ok/ |access-date=2025-03-27 |website=Top Class Actions |language=en}}</ref> included certain Honda vehicles with 6-cylinder engines with Variable Cylinder Management (“VCM-2”) purchased or leased between 2008 and 2013 including the Honda Accord (2008-2012), Honda Odyssey (2008-2013), Honda Pilot (2009-2013), Honda Accord Crosstour (2010-2011), Honda Crosstour (2012). The settlement included a warranty extension for a period of eight years to cover Engine Misfire repairs. In addition, the settlement included full reimbursement to settlement class members who submitted proof of payments for repairs or parts involving diagnostic trouble codes (“DTC”) P0301, P0302, P0303, or P0304.<ref>{{Cite web |date=2015-04-24 |title=Client Settlement Site > Frequently Asked Questions |url=http://settlement-claims.com/enginemisfire/FrequentlyAskedQuestions.html |access-date=2025-03-27 |archive-url=https://web.archive.org/web/20150424134704/http://settlement-claims.com/enginemisfire/FrequentlyAskedQuestions.html |archive-date=24 April 2015 }}</ref>
+
+== Post-Lawsuit ==
+Customers continued to experience engine misfires and spark plug fouling on Honda vehicles equipped with VCM sold after the settlement.<ref>{{Cite web |date=Dec 21, 2020 |title=2015 Honda Odyssey - Issues with Piston Rings |url=https://www.odyclub.com/threads/2015-honda-odyssey-issues-with-piston-rings.361963/ |url-status=live |archive-url=https://web.archive.org/web/20250626174739/https://www.odyclub.com/threads/2015-honda-odyssey-issues-with-piston-rings.361963/ |archive-date=June 26, 2025}}</ref> On June 17, 2025, American Honda announced another warranty extension for certain 2013-2015 Pilot and 2013-2017 Odyssey vehicles.<ref>{{Cite web |last=Ok-Airport-2063 |date=2025-06-17 |title=VCM warranty extension |url=http://www.reddit.com/r/HondaOdyssey/comments/1ldmgjo/vcm_warranty_extension/ |access-date=2025-06-26 |website=r/HondaOdyssey}}</ref>
+
+==Vehicles equipped with VCM==
+* 2003 [[Honda Inspire]] (3- and 6-cylinder operation)
+* 2004+ [[Honda Elysion|Honda Elysion V6]]
+* 2005–2007 [[Honda Accord Hybrid]] (''[[Honda J engine#JNA1|JNA1]]'')
+* 2005-10 [[Honda Odyssey (North America)|Honda Odyssey]] (USDM) - EX-L and Touring Models only (''[[Honda J engine#J35A7 – VCM|J35A7]]'') - 2005-2007 models are equipped with VCM-1 (3- and 6-cylinder operation) - 2008-2010 models are equipped with VCM-2 (3-, 4-, and 6-cylinder operation).
+* 2011+ [[Honda Odyssey (North America)|Honda Odyssey]] (USDM) - 2011-2017 models are equipped with VCM-2 (3-, 4-, and 6-cylinder operation) - 2018+ models are equipped with VCM-3 (3- and 6-cylinder operation). 
+* 2006–2008 [[Honda Pilot]] 2WD Models only (''[[Honda J engine#J35Z1 – VCM|J35Z1]]'') - VCM-1 (3- and 6-cylinder operation)
+* 2008–2017 [[Honda Accord]] V6 (except EX-L V6 6MT Coupe) - 2008-2012 models are equipped with VCM-2 (3-, 4-, and 6-cylinder operation) - 2013-2017 models are equipped with VCM-3 (3- and 6-cylinder operation).<ref>{{Cite web|url=http://www.vtec.net/news/news-item?news_item_id=1091517|title=Temple of VTEC Rumors and News - All-New 2013 Honda Accord Brings Remarkable Levels of Luxury, Agility, Efficiency and Sophistication|access-date=2012-12-11|archive-date=2012-09-19|archive-url=https://web.archive.org/web/20120919183339/http://vtec.net/news/news-item?news_item_id=1091517|url-status=dead}}</ref>
+* 2009+ [[Honda Pilot]] (all models) - 2009-2015 models are equipped with VCM-2 (3-, 4-, and 6-cylinder operation) - 2016+ models are equipped with VCM-3 (3- and 6-cylinder operation).
+* 2010-2014 [[Acura TSX]] (V6)
+* 2013-2015 [[Acura RDX]] V6 VCM-2, 2016-2018 VCM-3
+* 2013 [[Acura RLX]] - VCM-3 (3- and 6-cylinder operation)
+* 2014 [[Acura MDX]] - VCM-3 (3- and 6-cylinder operation)
+* 2015 [[Acura RLX]] Sport Hybrid - VCM-3 (3- and 6-cylinder operation)
+* 2016-2020 [[Acura TLX]] V6
+* 2017 [[Honda Ridgeline]]
+* 2026 [[Honda Passport]]
+
+==See also==
+* [[Chrysler]]'s [[Multi-Displacement System]] (MDS)
+* [[Daimler AG]]'s [[Active Cylinder Control]] (ACC)
+* [[General Motors Corporation|General Motors]]' [[Active Fuel Management]] (AFM)
+* [[Variable displacement]]
+
+==References==
+{{Reflist}}
+
+==External links==
+* [http://www.canadiandriver.com/articles/jk/041014.htm CanadianDriver article] {{Webarchive|url=https://web.archive.org/web/20081109045315/http://www.canadiandriver.com/articles/jk/041014.htm |date=2008-11-09 }}
+* [http://world.honda.com/automobile-technology/VCM/ Honda Worldwide | Technology Picture Book | VCM]
+
+[[Category:Engine fuel system technology]]
+[[Category:Honda]]
+
+[[cs:VCM]]
+[[de:Zylinderabschaltung]]
+[[fr:VCM]]
+[[ms:Pengurusan Silinder Boleh Laras]]
+[[ja:VCM]]

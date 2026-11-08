@@ -57,3 +57,41 @@ problems and reset errors. The skill must work even for less capable agents.
   raw data (cell voltages, live PIDs) last.
 - **D16. The simulator takes fault modes (`sim:<car>:engine-off`, `:ignition-off`)** so an agent can rehearse
   the clear and error paths without a car.
+
+### Phase 2 — after the independent data/clear/skill review
+- **D17. `clear` clears engine/emissions codes by default; a module is cleared only when named
+  (`--only IEB`) or with `--only all`.** This reverses my first design (clear every module with codes):
+  the person must agree to each system by name, and some are safety systems (brakes, steering). When
+  modules have codes and none were named, the output lists them and says how to clear them.
+- **D18. History requires a VIN.** A scan without one (from the car or `--vin`) is reported but not
+  saved, and `clear` refuses. Different cars of one model (or different unidentified cars) must never
+  share a history. `--vin` must pass the North-American check digit unless `--vin-no-check` is given.
+- **D19. `clear` refuses when the connected car contradicts `--vin`/`--vehicle`** (`vehicle_mismatch`):
+  in a shop the adapter can be in the wrong car.
+- **D20. "Codes came back" is said only about a module that confirmed the clear.** Codes still present
+  in a module that stayed silent or refused are `not_acknowledged` / `refused` (one retry allowed).
+- **D21. A code list is complete only if every CAN OBD ECU answered service 03 and no ECU reports more
+  confirmed codes (or a lit MIL) than were read.** A `cleared` verdict is therefore never based on a lost
+  reply.
+- **D22. Vehicle notes are appended after safety advice, never replace it** (stop driving, flashing MIL).
+- **D23. The Kona profile needs VIN position 8 = `G`** (battery-electric per NHTSA vPIC): a gasoline 2020
+  Kona must not be treated as electric. The engine-off check also always asks the car for rpm.
+- **D24. Simulator output is marked (`summary.simulated`, headline `SIMULATOR —`) and is saved to a
+  separate `simulator.db` unless `--db` is given.**
+- **D25. `present_in_latest` means set (stored/pending/active) in the latest complete session**; a code
+  left only as permanent is not "present". A clear and the scan right before it count as one visit.
+- **D26. Readiness verdict follows US I/M rules of thumb**: continuous monitors must be ready, at most one
+  other monitor incomplete for MY2001+ (two for 1996–2000), permanent codes noted. Some states are
+  stricter; the output says so.
+- **D27. After a verified clear, the output names the self-test (monitor) that must complete before a
+  repair may be called confirmed.**
+
+### Open decisions (need Aaron)
+- **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
+  confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and
+  whether explicit flow control (`ATFCSM1`) is right, and the rear TPMS left/right order.
+- **O2. Merge `hardening` into `main`.**
+- **O3. Shop data.** The history DB now holds customer VINs. Decide on retention, export and deletion
+  before using it in a shop (`history` has no delete).
+- **O4. Oxygen-sensor numbering for cars that use PID 1D** (four banks of two) instead of PID 13: carlink
+  names sensors by the PID 13 layout. None of the three cars is known to use 1D.

@@ -74,15 +74,20 @@ pub fn supported<T: Transport>(a: &mut Adapter<T>) -> Result<BTreeMap<String, Ve
     }
 }
 
-fn dtcs<T: Transport>(a: &mut Adapter<T>, service: &str, kind: &'static str) -> Result<Vec<Dtc>> {
+/// The codes, and which ECUs answered at all.
+fn dtcs<T: Transport>(a: &mut Adapter<T>, service: &str, kind: &'static str) -> Result<(Vec<Dtc>, Vec<String>)> {
     let sid = u8::from_str_radix(service, 16)? + 0x40;
     let skip = if a.bus().is_can() { 2 } else { 1 };
-    Ok(by_service(a.query(service)?, sid)
+    let msgs: Vec<Message> = by_service(a.query(service)?, sid).collect();
+    let answered = msgs.iter().map(|m| m.ecu.clone()).collect();
+    let codes = msgs
+        .into_iter()
         .flat_map(|m| {
             let ecu = m.ecu.clone();
             obd::decode_dtc_list(m.data.get(skip..).unwrap_or(&[])).into_iter().map(move |code| Dtc { code, kind, ecu: ecu.clone() })
         })
-        .collect())
+        .collect();
+    Ok((codes, answered))
 }
 
 /// The engine ECU's VIN when it has a valid one, else any module's valid VIN.
@@ -117,7 +122,16 @@ pub fn scan<T: Transport>(a: &mut Adapter<T>) -> Result<Scan> {
     let mut dtcs_all = Vec::new();
     for (service, kind, what) in [("03", "stored", "stored codes"), ("07", "pending", "pending codes"), ("0A", "permanent", "permanent codes")] {
         match dtcs(a, service, kind) {
-            Ok(d) => dtcs_all.extend(d),
+            Ok((d, answered)) => {
+                // On CAN every OBD ECU answers 03 ("43 00" when it has none); silence is a lost reply.
+                if service == "03" && a.bus().is_can() {
+                    for ecu in supported.keys().filter(|e| !answered.contains(e)) {
+                        errors.push(format!("{what}: ECU {ecu} did not answer"));
+                        codes_complete = false;
+                    }
+                }
+                dtcs_all.extend(d);
+            }
             Err(e) => {
                 errors.push(format!("{what}: {e}"));
                 codes_complete = false;
@@ -146,6 +160,15 @@ pub fn scan<T: Transport>(a: &mut Adapter<T>) -> Result<Scan> {
                     live.push(EcuReading { ecu: m.ecu.clone(), reading });
                 }
             }
+        }
+    }
+
+    // The monitor status counts each ECU's confirmed codes; fewer read than counted means some were lost.
+    for m in &monitors {
+        let read = dtcs_all.iter().filter(|d| d.ecu == m.ecu && d.kind == "stored").count();
+        if (m.status.dtc_count as usize) > read {
+            errors.push(format!("ECU {} reports {} confirmed code(s) but {read} were read", m.ecu, m.status.dtc_count));
+            codes_complete = false;
         }
     }
 
@@ -275,6 +298,35 @@ mod tests {
         sim.inject("020200", "7E8 05 42 02 00 03 03\r7E9 05 42 02 00 00 00");
         let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
         assert_eq!(s.freeze_frames.iter().map(|f| f.ecu.as_str()).collect::<Vec<_>>(), vec!["7E8"]);
+    }
+
+    #[test]
+    fn an_ecu_that_stays_silent_to_03_makes_the_codes_incomplete() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.inject("03", "7E9 02 43 00");
+        let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
+        assert!(!s.codes_complete);
+        assert!(s.errors.iter().any(|e| e.contains("7E8 did not answer")), "{:?}", s.errors);
+    }
+
+    #[test]
+    fn fewer_codes_than_the_ecu_counts_makes_the_codes_incomplete() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.inject("03", "7E8 04 43 01 03 03\r7E9 02 43 00");
+        let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
+        assert!(!s.codes_complete, "PCM counts 2 confirmed codes, only 1 was read");
+        assert!(scan(&mut Adapter::connect(Sim::new("odyssey-2016").unwrap()).unwrap()).unwrap().codes_complete);
+    }
+
+    #[test]
+    fn a_lit_mil_with_only_a_pending_code_is_a_complete_read() {
+        // a severe misfire lights (flashes) the MIL while its code is still pending
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.inject("0101", "7E8 06 41 01 80 07 E5 04\r7E9 06 41 01 00 04 00 00");
+        sim.inject("03", "7E8 02 43 00\r7E9 02 43 00");
+        sim.inject("07", "7E8 04 47 01 03 01\r7E9 02 47 00");
+        let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
+        assert!(s.codes_complete, "{:?}", s.errors);
     }
 
     #[test]

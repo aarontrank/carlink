@@ -20,6 +20,8 @@ struct Ecu {
     module_dtcs: Vec<([u8; 3], u8)>,
     module: bool,
     kwp: bool,
+    /// Service 06: monitor/test ID → reply payload after the `46`.
+    mode06: BTreeMap<u8, Vec<u8>>,
 }
 
 pub struct Sim {
@@ -60,6 +62,11 @@ fn pids(list: &[(u8, &[u8])]) -> BTreeMap<u8, Vec<u8>> {
     list.iter().map(|(p, d)| (*p, d.to_vec())).collect()
 }
 
+fn misfire(mid: u8, average: u16, current: u16) -> (u8, Vec<u8>) {
+    let rec = |tid: u8, n: u16| [vec![mid, tid, 0x24], n.to_be_bytes().to_vec(), vec![0, 0, 0xFF, 0xFF]].concat();
+    (mid, [rec(0x0B, average), rec(0x0C, current)].concat())
+}
+
 impl Sim {
     pub fn new(vehicle: &str) -> Result<Sim> {
         let (bus, protocol, ecus) = match vehicle {
@@ -73,6 +80,7 @@ impl Sim {
                     (0x24, &[0x80, 0x10, 0x66, 0x00]),
                 ]),
                 stored: vec![0x0420, 0x1457],
+                mode06: [(0x4D, vec![0x4D, 0x81, 0x00, 0x82, 0x00, 0x46]), (0x62, vec![0x62, 0x04, 0x00, 0x20, 0x00, 0x40])].into(),
                 ..Default::default()
             }]),
             "odyssey-2016" => (Bus::Can11, ("6", "ISO 15765-4 (CAN 11/500)"), vec![
@@ -91,6 +99,18 @@ impl Sim {
                     stored: vec![0x0303, 0x3400],
                     permanent: vec![0x0303],
                     vin: Some("5FNRL5H60GB000001"),
+                    // VCM pattern: misfires on cylinders 1–3 (wiki honda-mode06).
+                    mode06: [
+                        (0x21, vec![0x21, 0xA9, 0x86, 0x02, 0xE5, 0x02, 0xD0, 0x7F, 0xFF]),
+                        (0xA1, vec![0xA1, 0x0C, 0x24, 0x01, 0x86, 0, 0, 0xFF, 0xFF]),
+                        misfire(0xA2, 30, 120),
+                        misfire(0xA3, 20, 90),
+                        misfire(0xA4, 45, 180),
+                        misfire(0xA5, 0, 0),
+                        misfire(0xA6, 0, 0),
+                        misfire(0xA7, 0, 0),
+                    ]
+                    .into(),
                     ..Default::default()
                 },
                 Ecu { id: 0x7E9, pids: pids(&[(0x01, &[0x00, 0x04, 0x00, 0x00]), (0x0D, &[0x00])]), ..Default::default() },
@@ -228,6 +248,18 @@ impl Sim {
             v
         };
         match req {
+            [0x06, id] if id % 0x20 == 0 && !ecu.mode06.is_empty() => {
+                let mut bitmap = 0u32;
+                for m in ecu.mode06.keys().filter(|m| **m > *id && **m <= id.saturating_add(0x20)) {
+                    bitmap |= 1 << (0x20 - (m - id));
+                }
+                if ecu.mode06.keys().any(|m| *m as u16 > *id as u16 + 0x20) {
+                    bitmap |= 1;
+                }
+                let filler = if self.bus.is_can() { vec![] } else { vec![0xFF] };
+                Some([vec![0x46, *id], filler, bitmap.to_be_bytes().to_vec()].concat())
+            }
+            [0x06, id] => ecu.mode06.get(id).map(|p| [vec![0x46], p.clone()].concat()),
             [0x01, pid] if pid % 0x20 == 0 && !ecu.pids.is_empty() => {
                 let mut bitmap = 0u32;
                 for p in ecu.pids.keys().filter(|p| **p > *pid && **p <= pid + 0x20) {
@@ -238,6 +270,11 @@ impl Sim {
                 }
                 (bitmap != 0 || *pid == 0).then(|| [vec![0x41, *pid], bitmap.to_be_bytes().to_vec()].concat())
             }
+            // Monitor status: MIL and confirmed-code count follow the stored codes, like a real ECU.
+            [0x01, 0x01] => ecu.pids.get(&0x01).map(|d| {
+                let a = (ecu.stored.len() as u8 & 0x7F) | if ecu.stored.is_empty() { 0 } else { 0x80 };
+                vec![0x41, 0x01, a, d[1], d[2], d[3]]
+            }),
             [0x01, pid] => ecu.pids.get(pid).map(|d| [vec![0x41, *pid], d.clone()].concat()),
             [0x02, 0x02, 0x00] => ecu.stored.first().map(|c| [vec![0x42, 0x02, 0x00], c.to_be_bytes().to_vec()].concat()),
             [0x02, pid, 0x00] if !ecu.stored.is_empty() => ecu.pids.get(pid).map(|d| [vec![0x42, *pid, 0x00], d.clone()].concat()),
@@ -270,6 +307,10 @@ impl Sim {
 }
 
 impl Transport for Sim {
+    fn simulated(&self) -> bool {
+        true
+    }
+
     fn exchange(&mut self, cmd: &str) -> Result<String> {
         let cmd = cmd.replace(' ', "").to_uppercase();
         self.log.push(cmd.clone());
@@ -322,6 +363,10 @@ impl Transport for Sim {
                     for e in &mut self.ecus {
                         e.stored.clear();
                         e.pending.clear();
+                        // Clearing restarts the non-continuous self-tests: every supported one becomes incomplete.
+                        if let Some(m) = e.pids.get_mut(&0x01) {
+                            m[3] = m[2];
+                        }
                     }
                 }
                 let lines: Vec<String> = self

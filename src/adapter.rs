@@ -11,10 +11,17 @@ pub trait Transport {
 
     /// Abort anything the adapter may still be doing from an earlier session and discard its output.
     fn interrupt(&mut self) {}
+
+    /// True for the built-in simulator: its output must never be mistaken for a real car.
+    fn simulated(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AdapterInfo {
+    /// The built-in simulator, not a real adapter and car.
+    pub simulated: bool,
     pub device: String,
     pub stn: Option<String>,
     pub stn_device: Option<String>,
@@ -87,7 +94,7 @@ impl<T: Transport> Adapter<T> {
         let device = clean(&t.exchange("ATI")?);
         let stn = Some(clean(&t.exchange("STI")?)).filter(|s| s != "?");
         let stn_device = Some(clean(&t.exchange("STDI")?)).filter(|s| s != "?");
-        let info = AdapterInfo { device, stn, stn_device, protocol: String::new(), protocol_number: String::new() };
+        let info = AdapterInfo { simulated: t.simulated(), device, stn, stn_device, protocol: String::new(), protocol_number: String::new() };
         Ok(Adapter { t, bus: Bus::Legacy, info, physical: None, dirty: false })
     }
 
@@ -239,6 +246,10 @@ impl Transport for Box<dyn Transport> {
 
     fn interrupt(&mut self) {
         (**self).interrupt()
+    }
+
+    fn simulated(&self) -> bool {
+        (**self).simulated()
     }
 }
 

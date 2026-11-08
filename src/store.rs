@@ -82,16 +82,46 @@ pub struct Point {
     pub at: String,
     pub value: f64,
     pub unit: String,
+    /// scan / pre-clear / clear.
+    pub kind: String,
+    /// From the same session's rpm (or, on an EV, its HV main relay); None when unknown.
+    pub engine_running: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct DtcHistory {
     pub code: String,
-    pub kinds: String,
+    /// Where it was reported: an OBD ECU address or a module name.
+    pub source: String,
+    /// Every kind/state ever recorded (stored, pending, permanent, active, history…).
+    pub kinds_ever: String,
     pub first_seen: String,
     pub last_seen: String,
+    /// Sessions it appeared in. A `clear` records two sessions (just before and just after).
     pub sessions: i64,
+    /// Set (stored, pending or active) in the most recent session whose code reads were complete.
+    /// A code left only as "permanent" is not set: it is waiting for the car to re-test the repair.
     pub present_in_latest: bool,
+    pub kinds_in_latest: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Change {
+    pub key: String,
+    pub unit: String,
+    pub before: f64,
+    pub after: f64,
+    pub change: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Comparison {
+    pub from: SessionSummary,
+    pub to: SessionSummary,
+    pub new_codes: Vec<String>,
+    pub gone_codes: Vec<String>,
+    pub still_present: Vec<String>,
+    pub readings: Vec<Change>,
 }
 
 /// Version 1: the original three tables.
@@ -192,11 +222,55 @@ impl Store {
 
     pub fn trend(&self, vehicle: &str, key: &str) -> Result<Vec<Point>> {
         let mut q = self.db.prepare(
-            "SELECT s.id, s.at, r.value, r.unit FROM readings r JOIN sessions s ON s.id = r.session_id
+            "SELECT s.id, s.at, r.value, r.unit, s.kind,
+                    (SELECT MAX(x.value > 0) FROM readings x WHERE x.session_id = s.id AND x.key IN ('rpm', 'main_relay') AND x.source != 'freeze')
+             FROM readings r JOIN sessions s ON s.id = r.session_id
              WHERE s.vehicle = ?1 AND r.key = ?2 AND r.source != 'freeze' ORDER BY s.at, s.id",
         )?;
-        let rows = q.query_map(params![vehicle, key], |r| Ok(Point { session_id: r.get(0)?, at: r.get(1)?, value: r.get(2)?, unit: r.get(3)? }))?;
+        let rows = q.query_map(params![vehicle, key], |r| {
+            Ok(Point { session_id: r.get(0)?, at: r.get(1)?, value: r.get(2)?, unit: r.get(3)?, kind: r.get(4)?, engine_running: r.get(5)? })
+        })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    fn summary(&self, id: i64) -> Result<Option<SessionSummary>> {
+        Ok(self.sessions(None, i64::MAX)?.into_iter().find(|s| s.id == id))
+    }
+
+    /// What changed between two sessions of one car: codes set (stored/pending/active) and every reading in
+    /// both. Refuses sessions of different cars, or one whose code reads were incomplete.
+    pub fn compare(&self, from: i64, to: i64) -> Result<Option<Comparison>> {
+        let (Some(a), Some(b)) = (self.summary(from)?, self.summary(to)?) else { return Ok(None) };
+        if a.vehicle != b.vehicle {
+            return Err(crate::problem::problem("bad_input", format!("session {from} is {} and session {to} is {}: different cars", a.vehicle, b.vehicle), "Compare two sessions of the same car (see `carlink history sessions --vehicle <key>`)."));
+        }
+        if let Some(s) = [&a, &b].into_iter().find(|s| !s.codes_complete) {
+            return Err(crate::problem::problem("bad_input", format!("session {}'s code read was incomplete, so codes cannot be compared", s.id), "Pick a session whose codes_complete is true."));
+        }
+        let set_codes = |id: i64| -> Result<Vec<String>> {
+            let mut q = self.db.prepare("SELECT DISTINCT code FROM dtcs WHERE session_id = ?1 AND kind IN ('stored', 'pending', 'active') ORDER BY code")?;
+            let rows = q.query_map([id], |r| r.get(0))?;
+            Ok(rows.collect::<rusqlite::Result<_>>()?)
+        };
+        let (ca, cb) = (set_codes(from)?, set_codes(to)?);
+        let mut q = self.db.prepare(
+            "SELECT x.key, x.unit, x.value, y.value FROM readings x JOIN readings y ON y.key = x.key AND y.source = x.source
+             WHERE x.session_id = ?1 AND y.session_id = ?2 AND x.source != 'freeze' ORDER BY x.key",
+        )?;
+        let readings = q
+            .query_map(params![from, to], |r| {
+                let (before, after): (f64, f64) = (r.get(2)?, r.get(3)?);
+                Ok(Change { key: r.get(0)?, unit: r.get(1)?, before, after, change: ((after - before) * 100.0).round() / 100.0 })
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        Ok(Some(Comparison {
+            new_codes: cb.iter().filter(|c| !ca.contains(c)).cloned().collect(),
+            gone_codes: ca.iter().filter(|c| !cb.contains(c)).cloned().collect(),
+            still_present: ca.iter().filter(|c| cb.contains(c)).cloned().collect(),
+            readings,
+            from: a,
+            to: b,
+        }))
     }
 
     pub fn keys(&self, vehicle: &str) -> Result<Vec<String>> {
@@ -220,13 +294,24 @@ impl Store {
     pub fn dtc_history(&self, vehicle: &str) -> Result<Vec<DtcHistory>> {
         let mut q = self.db.prepare(
             "WITH latest AS (SELECT id FROM sessions WHERE vehicle = ?1 AND codes_complete = 1 ORDER BY at DESC, id DESC LIMIT 1)
-             SELECT d.code, GROUP_CONCAT(DISTINCT d.kind), MIN(s.at), MAX(s.at), COUNT(DISTINCT s.id),
-                    MAX(s.id IN (SELECT id FROM latest))
+             SELECT d.code, d.ecu, GROUP_CONCAT(DISTINCT d.kind), MIN(s.at), MAX(s.at),
+                    COUNT(DISTINCT s.id),
+                    COALESCE(MAX(s.id IN (SELECT id FROM latest) AND d.kind IN ('stored', 'pending', 'active')), 0),
+                    (SELECT GROUP_CONCAT(DISTINCT x.kind) FROM dtcs x WHERE x.session_id IN (SELECT id FROM latest) AND x.code = d.code AND x.ecu = d.ecu)
              FROM dtcs d JOIN sessions s ON s.id = d.session_id WHERE s.vehicle = ?1
-             GROUP BY d.code ORDER BY MAX(s.at) DESC, d.code",
+             GROUP BY d.code, d.ecu ORDER BY MAX(s.at) DESC, d.code",
         )?;
         let rows = q.query_map([vehicle], |r| {
-            Ok(DtcHistory { code: r.get(0)?, kinds: r.get(1)?, first_seen: r.get(2)?, last_seen: r.get(3)?, sessions: r.get(4)?, present_in_latest: r.get(5)? })
+            Ok(DtcHistory {
+                code: r.get(0)?,
+                source: r.get(1)?,
+                kinds_ever: r.get(2)?,
+                first_seen: r.get(3)?,
+                last_seen: r.get(4)?,
+                sessions: r.get(5)?,
+                present_in_latest: r.get(6)?,
+                kinds_in_latest: r.get(7)?,
+            })
         })?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
@@ -371,6 +456,42 @@ mod tests {
         let p0420 = h.iter().find(|d| d.code == "P0420").unwrap();
         assert_eq!((p0420.first_seen.as_str(), p0420.last_seen.as_str(), p0420.sessions, p0420.present_in_latest), ("2026-01-01T00:00:00Z", "2026-01-05T00:00:00Z", 2, true));
         assert!(!h.iter().find(|d| d.code == "P0303").unwrap().present_in_latest);
+    }
+
+    #[test]
+    fn a_code_left_only_as_permanent_is_not_present() {
+        let s = store();
+        save(&s, "A", "2026-01-01T00:00:00Z", vec![], vec![dtc("P0303", "stored"), dtc("P0303", "permanent")]);
+        s.save_session(&NewSession { vehicle: "A".into(), kind: "pre-clear".into(), at: Some("2026-01-01T01:00:00Z".into()), report: json!({}), dtcs: vec![dtc("P0303", "stored"), dtc("P0303", "permanent")], codes_complete: true, ..Default::default() }).unwrap();
+        s.save_session(&NewSession { vehicle: "A".into(), kind: "clear".into(), at: Some("2026-01-01T01:01:00Z".into()), report: json!({}), dtcs: vec![dtc("P0303", "permanent")], codes_complete: true, ..Default::default() }).unwrap();
+        let h = s.dtc_history("A").unwrap();
+        assert!(!h[0].present_in_latest);
+        assert_eq!(h[0].kinds_in_latest.as_deref(), Some("permanent"));
+        assert_eq!(h[0].sessions, 3);
+    }
+
+    #[test]
+    fn trend_points_say_session_kind_and_engine_state() {
+        let s = store();
+        save(&s, "A", "2026-01-01T00:00:00Z", vec![reading("battery_voltage", 14.1), reading("rpm", 700.0)], vec![]);
+        save(&s, "A", "2026-01-02T00:00:00Z", vec![reading("battery_voltage", 12.6), reading("rpm", 0.0)], vec![]);
+        let t = s.trend("A", "battery_voltage").unwrap();
+        assert_eq!(t.iter().map(|p| (p.kind.as_str(), p.engine_running)).collect::<Vec<_>>(), vec![("scan", Some(true)), ("scan", Some(false))]);
+    }
+
+    #[test]
+    fn compare_lists_new_gone_and_changed() {
+        let s = store();
+        let a = save(&s, "A", "2026-01-01T00:00:00Z", vec![reading("ltft_b1", 12.0)], vec![dtc("P0171", "stored"), dtc("P0420", "stored")]);
+        let b = save(&s, "A", "2026-02-01T00:00:00Z", vec![reading("ltft_b1", 2.0)], vec![dtc("P0420", "stored"), dtc("P0300", "pending")]);
+        let c = s.compare(a, b).unwrap().unwrap();
+        assert_eq!((c.new_codes, c.gone_codes, c.still_present), (vec!["P0300".to_string()], vec!["P0171".to_string()], vec!["P0420".to_string()]));
+        assert_eq!(c.readings[0].change, -10.0);
+        assert!(s.compare(a, 999).unwrap().is_none());
+        let other = save(&s, "B", "2026-02-02T00:00:00Z", vec![], vec![]);
+        assert!(s.compare(a, other).is_err(), "different cars");
+        let incomplete = s.save_session(&NewSession { vehicle: "A".into(), kind: "clear".into(), report: json!({}), codes_complete: false, ..Default::default() }).unwrap();
+        assert!(s.compare(a, incomplete).is_err(), "incomplete code read");
     }
 
     #[test]

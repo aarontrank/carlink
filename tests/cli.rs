@@ -217,6 +217,15 @@ fn unknown_vehicle_profile_is_an_error() {
 }
 
 #[test]
+fn dtc_typo_with_letter_o_is_explained() {
+    let e = env();
+    let (ok, r) = run(&e, &["dtc", "PO420"]);
+    assert!(!ok);
+    assert_eq!(kind(&r), "bad_input");
+    assert!(r["error"].as_str().unwrap().contains("P0420"));
+}
+
+#[test]
 fn dtc_lookup_without_hardware() {
     let e = env();
     let (ok, r) = run(&e, &["dtc", "p0420"]);
@@ -273,6 +282,30 @@ fn raw_without_header_and_bad_header() {
     let (ok, r) = run(&e, &["--port", "sim:crv-2004", "raw", "0105", "--header", "18DAF110"]);
     assert!(!ok);
     assert_eq!(kind(&r), "bad_input");
+}
+
+#[test]
+fn history_compare_shows_what_changed() {
+    let e = env();
+    let a = run(&e, &["--port", "sim:odyssey-2016", "scan"]).1["session_id"].as_i64().unwrap();
+    let (ok, cleared) = run(&e, &["--port", "sim:odyssey-2016:engine-off", "clear", "--confirm-clear-codes"]);
+    assert!(ok, "{cleared}");
+    let b = cleared["post_clear_session_id"].as_i64().unwrap();
+    let (ok, c) = run(&e, &["history", "compare", &a.to_string(), &b.to_string()]);
+    assert!(ok, "{c}");
+    assert_eq!(c["gone_codes"], serde_json::json!(["P0303", "P3400"]));
+}
+
+#[test]
+fn tests_command_reads_misfire_counters() {
+    let e = env();
+    let (ok, r) = run(&e, &["--port", "sim:odyssey-2016", "tests"]);
+    assert!(ok, "{r}");
+    assert_eq!(r["misfire"][3]["cylinder"], 3);
+    assert!(r["findings"].as_array().unwrap().iter().any(|f| f["title"] == "Cylinder 3 misfiring"));
+    let (ok, r) = run(&e, &["--port", "sim:crv-2004", "tests", "--vehicle", "crv-2004"]);
+    assert!(ok, "{r}");
+    assert!(r["results"].as_array().unwrap().iter().any(|x| x["test"].as_str().unwrap().contains("thermostat")));
 }
 
 #[test]

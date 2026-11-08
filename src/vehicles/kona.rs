@@ -93,6 +93,7 @@ pub fn decode_0101(p: &[u8]) -> Vec<Reading> {
         r("soc_bms", "Battery SOC (BMS)", p[4] as f64 / 2.0, "%"),
         r("avail_charge_kw", "Available charge power", u16be(p, 5) / 100.0, "kW"),
         r("avail_discharge_kw", "Available discharge power", u16be(p, 7) / 100.0, "kW"),
+        r("main_relay", "HV main relay closed (car READY or charging)", (p[9] & 0x01) as f64, "0/1"),
         r("pack_current", "Pack current (+ = discharge)", s16be(p, 10) / 10.0, "A"),
         r("pack_voltage", "Pack voltage", u16be(p, 12) / 10.0, "V"),
         r("batt_temp_max", "Battery max temperature", s8(p[14]), "°C"),
@@ -325,8 +326,26 @@ pub fn findings(rs: &[Reading]) -> Vec<Finding> {
             out.push(finding(Severity::Advice, "EV battery showing wear", detail, "Normal ageing; compare with history to see the rate."));
         }
     }
-    if let Some(v) = get(rs, "aux_12v").or_else(|| get(rs, "aux_12v_bms")).filter(|v| *v < 12.2) {
-        out.push(finding(Severity::Warning, "12 V aux battery low", format!("{v:.2} V."), "A weak 12 V battery stops the car from going READY. Test/replace it; it is charged only while the car is on or charging."));
+    let ready = get(rs, "main_relay") == Some(1.0);
+    // With the HV system on, the converter (LDC) charges the 12 V battery (wiki kona-ev-resets); a voltage
+    // below that of a rested, healthy battery means it is not doing so. Uses the mV-resolution VCU reading.
+    match (get(rs, "aux_12v"), get(rs, "aux_12v").or_else(|| get(rs, "aux_12v_bms"))) {
+        (Some(v), _) if ready && v < 12.4 => out.push(finding(Severity::Warning, "12 V battery is not being charged", format!("{v:.2} V with the high-voltage system on — lower than a rested, healthy battery."), "Have the 12 V converter (LDC, in the integrated charger/converter unit) and its fuse checked; without it the 12 V battery runs flat and the car will not go READY.")),
+        (_, Some(v)) if v < 12.2 => out.push(finding(Severity::Warning, "12 V aux battery low", format!("{v:.2} V."), "A weak 12 V battery stops the car from going READY. Test/replace it; it is charged only while the car is on or charging.")),
+        _ => {}
+    }
+    let tires: Vec<(&str, f64)> = ["fl", "fr", "rear_a", "rear_b"].iter().filter_map(|t| get(rs, &format!("tire_{t}_psi")).map(|p| (*t, p))).collect();
+    if let Some(max) = tires.iter().map(|t| t.1).reduce(f64::max) {
+        for (tire, psi) in &tires {
+            if *psi < 28.0 || *psi < max * 0.8 {
+                let which = match *tire {
+                    "fl" => "front-left",
+                    "fr" => "front-right",
+                    _ => "one rear",
+                };
+                out.push(finding(Severity::Warning, "Tire pressure low", format!("{which} tire at {psi:.1} psi (highest is {max:.1} psi)."), "Check it for a puncture and inflate all tires to the door-placard pressure with the tires cold. (Which rear tire is which is not certain from the data.)"));
+            }
+        }
     }
     out
 }
@@ -542,5 +561,20 @@ mod tests {
         assert_eq!(sev(soh(78.0)), vec![Severity::Warning]);
         let aux = vec![Reading::new("aux_12v", "", 11.8, "V")];
         assert_eq!(sev(aux), vec![Severity::Warning]);
+    }
+
+    #[test]
+    fn ready_car_whose_12v_is_not_charged_is_flagged() {
+        let ready = |v: f64| vec![Reading::new("main_relay", "", 1.0, "0/1"), Reading::new("aux_12v", "", v, "V")];
+        assert_eq!(findings(&ready(12.3))[0].title, "12 V battery is not being charged");
+        assert!(findings(&ready(14.1)).is_empty());
+        assert!(findings(&ready(12.8)).is_empty(), "a converter in a low-load mode is not a fault");
+    }
+
+    #[test]
+    fn a_low_tire_is_flagged() {
+        let tires = |fl: f64| ["fl", "fr", "rear_a", "rear_b"].iter().map(|t| Reading::new(format!("tire_{t}_psi"), "", if *t == "fl" { fl } else { 37.0 }, "psi")).collect::<Vec<_>>();
+        assert_eq!(findings(&tires(18.0))[0].title, "Tire pressure low");
+        assert!(findings(&tires(36.0)).is_empty());
     }
 }

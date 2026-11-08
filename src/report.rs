@@ -7,6 +7,7 @@ use crate::obd::Reading;
 use crate::scan::{self, Scan};
 use crate::store::{NewSession, Store, StoredDtc, StoredReading};
 use crate::dtc;
+use crate::mode06;
 use crate::uds::{self, ModuleReport};
 use crate::vehicles::{self, Profile, VinFacts};
 use anyhow::Result;
@@ -15,6 +16,8 @@ use serde::Serialize;
 #[derive(Debug, Serialize, Default)]
 pub struct Summary {
     pub headline: String,
+    /// True when this came from the built-in simulator: never present it as a real car.
+    pub simulated: bool,
     pub critical: usize,
     pub warning: usize,
     pub advice: usize,
@@ -57,6 +60,10 @@ pub struct Report {
     pub codes: Vec<CodeSummary>,
     /// False when a code read failed: absence of a code in `codes` then proves nothing.
     pub codes_complete: bool,
+    /// OBD emissions-inspection outlook (None when the car reports no readiness monitors, e.g. the Kona).
+    pub inspection: Option<findings::Inspection>,
+    /// Service 06 self-test results and per-cylinder misfire counts (CAN cars; `carlink tests` for K-line).
+    pub tests: Option<mode06::Tests>,
     /// Trouble codes in the car's other modules (brakes, airbags, TPMS…), for profiles that list them.
     pub modules: Vec<ModuleReport>,
     pub vehicle: Option<&'static Profile>,
@@ -115,10 +122,16 @@ pub fn build<T: Transport>(a: &mut Adapter<T>, ident: &Ident) -> Result<Report> 
         None => (vec![], vec![]),
     };
     let modules: Vec<ModuleReport> = vehicle.map(|v| v.modules.iter().map(|m| uds::read_module(a, m)).collect()).unwrap_or_default();
-    let mut findings = findings::generic(&scan);
+    // K-line service 06 has no misfire counts, only raw maker tests: only `carlink tests` reads it there.
+    let tests = a.bus().is_can().then(|| mode06::read(a, vehicle.map(|v| v.id))).filter(|t| t.supported);
+    let model_year = vin.as_deref().map(vehicles::vin_info).and_then(|f| f.model_year);
+    let mut findings = findings::generic(&scan, model_year);
     findings.extend(module_findings(&modules));
+    if let Some(t) = &tests {
+        findings.extend(findings::tests(t));
+    }
     if let Some(v) = vehicle {
-        vehicles::annotate(v, &scan, &extended, &mut findings);
+        vehicles::annotate(v, &scan, &extended, tests.as_ref(), &mut findings);
     }
     findings.append(&mut extra);
     findings.append(&mut checks);
@@ -131,10 +144,19 @@ pub fn build<T: Transport>(a: &mut Adapter<T>, ident: &Ident) -> Result<Report> 
         (None, Some(VinFacts { make: Some(m), model_year: Some(y), .. })) => format!("{y} {m}"),
         _ => "Unknown vehicle".to_string(),
     };
+    let total = codes.len() + module_codes;
+    let code_text = if scan.codes_complete && modules.iter().all(|m| m.error.is_none()) {
+        format!("{total} trouble code(s)")
+    } else {
+        format!("code read INCOMPLETE, at least {total} trouble code(s)")
+    };
+    let simulated = scan.adapter.simulated;
     let summary = Summary {
+        simulated,
         headline: format!(
-            "{name}: {} critical, {} warning, {} advice, {} info; {} trouble code(s)",
-            count(Severity::Critical), count(Severity::Warning), count(Severity::Advice), count(Severity::Info), codes.len() + module_codes
+            "{}{name}: {} critical, {} warning, {} advice, {} info; {code_text}",
+            if simulated { "SIMULATOR — " } else { "" },
+            count(Severity::Critical), count(Severity::Warning), count(Severity::Advice), count(Severity::Info)
         ),
         critical: count(Severity::Critical),
         warning: count(Severity::Warning),
@@ -143,7 +165,8 @@ pub fn build<T: Transport>(a: &mut Adapter<T>, ident: &Ident) -> Result<Report> 
     };
     let vin = VinInfo { make: facts.and_then(|f| f.make), model_year: facts.and_then(|f| f.model_year), check_digit_ok: facts.map(|f| f.check_digit_ok), vin, source };
     let codes_complete = scan.codes_complete && modules.iter().all(|m| m.error.is_none());
-    Ok(Report { summary, findings, codes, codes_complete, modules, vehicle, vehicle_key, identity_conflict, vin, scan, extended })
+    let inspection = findings::inspection(&scan, model_year);
+    Ok(Report { summary, findings, codes, codes_complete, inspection, tests, modules, vehicle, vehicle_key, identity_conflict, vin, scan, extended })
 }
 
 fn module_findings(modules: &[ModuleReport]) -> Vec<Finding> {
@@ -219,6 +242,14 @@ impl Report {
             out.extend(ff.readings.iter().map(|r| row("freeze", key(&r.key, &ff.ecu), r)));
         }
         out.extend(self.extended.iter().map(|r| row("extended", r.key.clone(), r)));
+        for m in self.tests.iter().flat_map(|t| &t.misfire) {
+            let cyl = if m.cylinder == 0 { "all".to_string() } else { format!("cyl{}", m.cylinder) };
+            for (suffix, v) in [("avg", m.average), ("current", m.current)] {
+                if let Some(v) = v {
+                    out.push(StoredReading { source: "mode06".into(), key: format!("misfire_{cyl}_{suffix}"), value: v, unit: "counts".into() });
+                }
+            }
+        }
         out
     }
 
@@ -303,7 +334,7 @@ mod tests {
         assert_eq!(r.vehicle_key.as_deref(), Some("1HGCM82633A004352"));
         assert!(r.vehicle.is_none());
         assert_eq!((r.vin.make, r.vin.model_year), (Some("Honda"), Some(2003)));
-        assert!(r.summary.headline.starts_with("2003 Honda"), "{}", r.summary.headline);
+        assert!(r.summary.headline.starts_with("SIMULATOR — 2003 Honda"), "{}", r.summary.headline);
     }
 
     #[test]
@@ -332,6 +363,23 @@ mod tests {
         let r = build(&mut Adapter::connect(sim).unwrap(), &Ident::default()).unwrap();
         assert!(!r.codes_complete);
         assert!(build_for("odyssey-2016", None).codes_complete);
+    }
+
+    #[test]
+    fn headline_says_when_the_code_read_was_incomplete() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.inject("03", "CAN ERROR");
+        sim.inject("03", "CAN ERROR");
+        let r = build(&mut Adapter::connect(sim).unwrap(), &Ident::default()).unwrap();
+        assert!(r.summary.headline.contains("INCOMPLETE"), "{}", r.summary.headline);
+        assert_eq!(r.findings[0].title, "Trouble-code read INCOMPLETE");
+    }
+
+    #[test]
+    fn simulator_reports_say_so() {
+        let r = build_for("odyssey-2016", None);
+        assert!(r.summary.simulated);
+        assert!(r.summary.headline.starts_with("SIMULATOR — "));
     }
 
     #[test]
@@ -394,6 +442,17 @@ mod tests {
         assert!(r.findings.iter().any(|f| f.severity == Severity::Warning && f.title.starts_with("IEB")));
         assert!(r.stored_dtcs().iter().any(|d| d.ecu == "IEB" && d.kind == "stored"));
         assert!(r.codes_complete);
+    }
+
+    #[test]
+    fn odyssey_scan_reads_misfire_counters_flags_cylinders_and_stores_them() {
+        let r = build_for("odyssey-2016", None);
+        let t = r.tests.as_ref().unwrap();
+        assert_eq!(t.misfire.iter().find(|m| m.cylinder == 3).unwrap().current, Some(180.0));
+        assert!(r.findings.iter().any(|f| f.severity == Severity::Warning && f.title.contains("Cylinder 3")), "{:?}", r.findings);
+        assert!(r.findings.iter().any(|f| f.title.contains("VCM")), "{:?}", r.findings);
+        assert!(r.stored_readings().iter().any(|x| x.key == "misfire_cyl3_current" && x.value == 180.0));
+        assert!(build_for("crv-2004", Some("crv-2004")).tests.is_none(), "K-line service 06 is only read by `carlink tests`");
     }
 
     #[test]

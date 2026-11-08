@@ -2,7 +2,7 @@
 
 mod crv;
 pub mod kona;
-mod odyssey;
+pub mod odyssey;
 
 use serde::Serialize;
 
@@ -122,7 +122,10 @@ pub fn extended<T: crate::adapter::Transport>(p: &Profile, a: &mut crate::adapte
 }
 
 /// Add vehicle knowledge to generic findings (known causes for codes, model-specific checks).
-pub fn annotate(p: &Profile, _scan: &crate::scan::Scan, extended: &[crate::obd::Reading], findings: &mut Vec<crate::findings::Finding>) {
+pub fn annotate(p: &Profile, _scan: &crate::scan::Scan, extended: &[crate::obd::Reading], tests: Option<&crate::mode06::Tests>, findings: &mut Vec<crate::findings::Finding>) {
+    if p.id == "odyssey-2016" {
+        findings.extend(odyssey::vcm_pattern(tests));
+    }
     for f in findings.iter_mut() {
         if let Some(note) = f.code.as_deref().and_then(|c| dtc_note(p, c)) {
             // Safety advice (stop driving, flashing light) stays first; the car-specific note follows it.
@@ -186,7 +189,7 @@ mod tests {
         let p = by_id("kona-ev-2020").unwrap();
         let mut f = vec![crate::findings::Finding { severity: crate::findings::Severity::Warning, code: Some("P0AA6".into()), title: "t".into(), detail: "d".into(), recommendation: "generic".into() }];
         let scan = crate::scan::scan(&mut crate::adapter::Adapter::connect(crate::sim::Sim::new("kona-ev-2020").unwrap()).unwrap()).unwrap();
-        annotate(p, &scan, &[], &mut f);
+        annotate(p, &scan, &[], None, &mut f);
         assert_eq!(f[0].recommendation, dtc_note(p, "P0AA6").unwrap());
     }
 
@@ -195,7 +198,7 @@ mod tests {
         let p = by_id("kona-ev-2020").unwrap();
         let mut f = vec![crate::findings::Finding { severity: crate::findings::Severity::Critical, code: Some("P0AA6".into()), title: "t".into(), detail: "d".into(), recommendation: "Do not drive or charge.".into() }];
         let scan = crate::scan::scan(&mut crate::adapter::Adapter::connect(crate::sim::Sim::new("kona-ev-2020").unwrap()).unwrap()).unwrap();
-        annotate(p, &scan, &[], &mut f);
+        annotate(p, &scan, &[], None, &mut f);
         assert!(f[0].recommendation.starts_with("Do not drive or charge."));
         assert!(f[0].recommendation.contains("On this car:"));
     }
