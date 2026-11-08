@@ -201,7 +201,8 @@ problems and reset errors. The skill must work even for less capable agents.
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and
   whether explicit flow control (`ATFCSM1`) is right, and the rear TPMS left/right order.
-- **O2. Merge `hardening` into `main`.**
+- **O2. Merge `hardening` into `main`.** Closed 2026-11-08: Aaron asked for the merge, and `main` was
+  fast-forwarded to `hardening`.
 - **O3. Shop data.** The history DB now holds customer VINs. Decide on retention, export and deletion
   before using it in a shop (`history` has no delete).
 - **O5. Kona modules not in carlink's table.** The captures show unnamed UDS modules (725, 733, 776,
