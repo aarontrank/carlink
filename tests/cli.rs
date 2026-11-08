@@ -117,6 +117,14 @@ fn clear_with_engine_off_is_verified_and_gives_next_steps() {
 }
 
 #[test]
+fn a_29_bit_odyssey_clear_can_be_rehearsed() {
+    let e = env();
+    let (ok, r) = run(&e, &["--port", "sim:odyssey-2016:can29:engine-off", "clear", "--confirm-clear-codes"]);
+    assert!(ok, "{r}");
+    assert_eq!(r["clear_status"], "cleared", "{r}");
+}
+
+#[test]
 fn clear_without_a_vin_is_refused() {
     let e = env();
     let (ok, r) = run(&e, &["--port", "sim:crv-2004:engine-off", "clear", "--vehicle", "crv-2004", "--confirm-clear-codes"]);

@@ -151,6 +151,22 @@ problems and reset errors. The skill must work even for less capable agents.
   makes carlink send a second clear or present a lost link as a clean result; at worst an error message
   names the wrong step, or the lost link is reported one request later in the same command.
 
+### Phase 5 — rehearsal and the Kona clear
+- **D43. On the Kona, codes are cleared with the car ON but not READY** (POWER pressed twice from off,
+  foot off the brake): the usual "ignition on, engine off" of a DTC erase. Scanning stays in READY.
+  Unverified: the module captures come from a damaged car and a bench rig, so no source shows which
+  state the modules need for a clear (O10). A wrong state shows as `refused` / `not_acknowledged`, never
+  as a silent clear. **Superseded by D45.**
+- **D44. Simulator faults combine** (`sim:odyssey-2016:can29:engine-off`), so every clear path can be
+  rehearsed. `sim::FAULTS` lists them; tests check that every listed fault is accepted and named in the
+  `--port` help and in SKILL.md.
+- **D45. Re-scope of D43 after the stopping rule (rounds 10 and 11 both had findings caused by my own
+  fixes): the Kona is cleared in the state it was scanned in** (READY, Park, parking brake on) — the one
+  state in which its modules have just answered — and only the single allowed retry after `refused` /
+  `not_acknowledged` uses ON-not-READY. This removes the unverified firm rule instead of patching it:
+  no power change before the first try, no dead end if one state is wrong, and the 12 V battery is
+  charged during the first try. The remaining round-11 items are recorded, not patched (review K53–K57).
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and
@@ -172,5 +188,8 @@ problems and reset errors. The skill must work even for less capable agents.
 - **O9. KWP2000 status byte meanings.** Hyundai's (0x40 failing now, 0x20 stored, 0x80 this drive) are
   applied to every KWP module; only the Kona has KWP modules today. A profile for another make that adds
   KWP modules needs its own mapping.
+- **O10. The Kona's power state for a module clear.** The skill clears in READY and retries once in ON
+  (D45). The first real clear should record which state the module acknowledged in, and skill step 6.2
+  should then name only that one.
 - **O4. Oxygen-sensor numbering for cars that use PID 1D** (four banks of two) instead of PID 13: carlink
   names sensors by the PID 13 layout. None of the three cars is known to use 1D.

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
-    /// Serial device, or `sim:<vehicle>` for the built-in simulator (add `:engine-off`, `:ignition-off`, `:not-in-car`, or `:can29` for the Odyssey). Default: auto-detect the OBDLink EX.
+    /// Serial device, or `sim:<vehicle>` for the built-in simulator, optionally with faults to rehearse: `:engine-off`, `:ignition-off`, `:not-in-car`, `:can29` (Odyssey), combinable (e.g. `sim:odyssey-2016:can29:engine-off`). Default: auto-detect the OBDLink EX.
     #[arg(long, global = true, env = "CARLINK_PORT")]
     port: Option<String>,
     /// History database. Default: ~/.local/share/carlink/carlink.db
@@ -172,7 +172,7 @@ enum HistoryCmd {
 
 fn transport(port: Option<&str>) -> Result<Box<dyn Transport>> {
     Ok(match port {
-        Some(p) if p.starts_with("sim:") => Box::new(sim::Sim::from_spec(&p[4..]).map_err(|e| problem("bad_input", e.to_string(), "Use one of the simulators listed by `carlink ports`."))?),
+        Some(p) if p.starts_with("sim:") => Box::new(sim::Sim::from_spec(&p[4..]).map_err(|e| problem("bad_input", e.to_string(), "Use `sim:<vehicle>` with a vehicle listed by `carlink ports`, plus only the faults that `carlink --help` names under --port."))?),
         Some(p) => Box::new(serial::open(p)?),
         None => {
             let p = serial::pick_port(&serial::candidates()).ok_or_else(|| {
@@ -371,6 +371,15 @@ mod tests {
                 out.push(sub.clone());
             }
             undocumented(s, &sub, out);
+        }
+    }
+
+    #[test]
+    fn the_port_help_names_every_simulator_fault() {
+        let cmd = Cli::command();
+        let help = cmd.get_arguments().find(|a| a.get_id() == "port").and_then(|a| a.get_help()).unwrap().to_string();
+        for fault in carlink::sim::FAULTS {
+            assert!(help.contains(&format!("`:{fault}`")), "--port help does not name :{fault}");
         }
     }
 

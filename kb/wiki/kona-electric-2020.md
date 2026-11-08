@@ -8,6 +8,7 @@ sources:
   - raw/evdash-carkiaeniro-src.md
   - raw/jejusoul-kona-niro-ev-pids.md
   - raw/nhtsa-recalls-hyundai-kona-electric.md
+  - raw/hyundai-kona-electric-erg-power-button.md
 tags: [vehicle, kona-electric, ev, hyundai]
 confidence: community
 ---
@@ -47,6 +48,7 @@ about 100 kW, and an AC OBC. Diagnosed with the [[obdlink-ex]] through `carlink`
 | Service 03 | **Contradicted 2026-11-08 ([[kona-ev-modules]]):** in real captures 03/07 were answered by 7EA, 7EB, 7EC and 7ED. Original text: Expected to return emission-related **stored** DTCs from 7E3/7E4, typically P0Axx/P1xxx hybrid/EV codes. Faults in body, chassis and TPMS modules are not visible through generic 03. No source documents the Kona's actual 03 behaviour. | unverified (inference from Service 01 support) |
 | Service 04 | **Contradicted 2026-11-08 ([[kona-ev-modules]]):** on a bench only the BMS (7EC) answered `44`; the others refused `7F 04 22`. carlink never sends 04 on this car (battery-campaign evidence, [[uds-module-dtcs]] §8). Original text: Clears emission DTCs in 7E3/7E4 only. See [[kona-ev-resets]] and [[clearing-codes]]. | verified (semantics) |
 | Service 09 VIN | **Settled 2026-11-08 ([[kona-ev-modules]]):** only the BMS answers, with the placeholder `OSEV__ BMS `, not a VIN — ask the user for it. Original text: Not documented by any source for this car. One owner reported that a generic scan tool could not read the VIN. | unverified |
+| Power states (for scanning vs clearing) | POWER button **without** the brake cycles OFF → ACC → ON → OFF; brake + button (in P) gives READY. "Ignition on, not READY" is therefore two presses from off, foot off the brake. carlink scans and clears in READY and retries a refused clear once in ON — its own choice (DECISIONS D45), not something a source says the modules require. | verified for the button cycle (raw/hyundai-kona-electric-erg-power-button.md: Hyundai's Kona Electric Emergency Response Guide, first-generation car; owners describe the same cycle); unverified convention for the clear state (DECISIONS O10) |
 | PID `015B` (hybrid/EV battery pack remaining life) | Standard J1979 PID, `100/255 × A` % (raw/wikipedia-obd2-pids-2026-11-07.wikitext). The BMS answers it. No source says whether it tracks BMS SOC or displayed SOC, so compare it on the car. Prefer 220101 p4 / 220105 p31, which have 0.5 % resolution. | community (support) / unverified (meaning) |
 
 ## Key numbers (from [[kona-ev-bms-pids]])

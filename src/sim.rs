@@ -87,6 +87,8 @@ struct Injection {
 }
 
 pub const VEHICLES: &[&str] = &["crv-2004", "odyssey-2016", "kona-ev-2020"];
+// Must name every fault `apply_fault` accepts: tests hold the --port help and SKILL.md to this list.
+pub const FAULTS: &[&str] = &["engine-off", "ignition-off", "not-in-car", "can29"];
 
 fn pids(list: &[(u8, &[u8])]) -> BTreeMap<u8, Vec<u8>> {
     list.iter().map(|(p, d)| (*p, d.to_vec())).collect()
@@ -168,29 +170,38 @@ impl Sim {
     }
 
     pub fn from_spec(spec: &str) -> Result<Sim> {
-        let (vehicle, fault) = spec.split_once(':').unwrap_or((spec, ""));
+        let mut parts = spec.split(':');
+        let vehicle = parts.next().unwrap_or_default();
         let mut sim = Sim::new(vehicle)?;
+        for fault in parts {
+            sim.apply_fault(vehicle, fault)?;
+        }
+        Ok(sim)
+    }
+
+    fn apply_fault(&mut self, vehicle: &str, fault: &str) -> Result<()> {
         match fault {
             "" => {}
-            "engine-off" => sim.ecus.iter_mut().filter(|e| e.pids.contains_key(&0x0C)).for_each(|e| {
+            "engine-off" => self.ecus.iter_mut().filter(|e| e.pids.contains_key(&0x0C)).for_each(|e| {
                 e.pids.insert(0x0C, vec![0, 0]);
             }),
-            "ignition-off" => sim.ignition_off = true,
+            "ignition-off" => self.ignition_off = true,
             "can29" if vehicle == "odyssey-2016" => {
                 // 2011–2015 Odysseys answer generic OBD on 29-bit CAN: engine 0x11, transmission 0x1D.
-                sim.bus = Bus::Can29;
-                sim.protocol = ("7", "ISO 15765-4 (CAN 29/500)");
-                for (e, id) in sim.ecus.iter_mut().zip([0x11, 0x1D]) {
+                self.bus = Bus::Can29;
+                self.protocol = ("7", "ISO 15765-4 (CAN 29/500)");
+                for (e, id) in self.ecus.iter_mut().zip([0x11, 0x1D]) {
                     e.id = id;
                 }
             }
+            "can29" => bail!("the can29 fault only applies to odyssey-2016"),
             "not-in-car" => {
-                sim.ignition_off = true;
-                sim.port_voltage = Some("0.1V");
+                self.ignition_off = true;
+                self.port_voltage = Some("0.1V");
             }
-            other => bail!("unknown simulator fault '{other}' (known: engine-off, ignition-off, not-in-car, can29 for odyssey-2016)"),
+            other => bail!("unknown simulator fault '{other}' (known: {}; can29 only for odyssey-2016)", FAULTS.join(", ")),
         }
-        Ok(sim)
+        Ok(())
     }
 
     /// Fail the next `cmd` and the `count - 1` exchanges after it, whatever they are, with error `kind`
@@ -470,6 +481,29 @@ impl Transport for Sim {
 mod tests {
     use super::*;
     use crate::adapter::Transport;
+
+    #[test]
+    fn faults_combine_so_a_29_bit_clear_can_be_rehearsed() {
+        let mut a = crate::adapter::Adapter::connect(Sim::from_spec("odyssey-2016:can29:engine-off").unwrap()).unwrap();
+        assert_eq!(a.bus(), Bus::Can29);
+        let rpm: Vec<f64> = a.query("010C").unwrap().iter().filter_map(|m| crate::obd::decode_pid(0x0C, &m.data[2..]).map(|r| r.value)).collect();
+        assert_eq!(rpm, vec![0.0]);
+    }
+
+    #[test]
+    fn every_listed_fault_is_accepted_and_named_in_the_skill() {
+        let skill = include_str!("../skills/carlink/SKILL.md");
+        for fault in FAULTS {
+            assert!(Sim::from_spec(&format!("odyssey-2016:{fault}")).is_ok(), "{fault}");
+            assert!(skill.contains(&format!(":{fault}")), "SKILL.md does not name :{fault}");
+        }
+    }
+
+    #[test]
+    fn can29_on_another_car_is_refused_as_odyssey_only() {
+        let e = Sim::from_spec("kona-ev-2020:can29").err().unwrap().to_string();
+        assert!(e.contains("only") && !e.contains("unknown"), "{e}");
+    }
 
     #[test]
     fn unknown_command_is_no_data_and_at_is_ok() {

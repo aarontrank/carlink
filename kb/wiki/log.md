@@ -46,3 +46,7 @@ charging rows aligned with carlink's findings.
 Sources: url:x-engineer.org (Service $03), url:scribd.com/document/334162539 (J1979 excerpt). [[dtc-format]]
 gained "When an ECU has no codes": on ISO 9141-2/J1850 a no-code reply is optional, on CAN and KWP it is
 required. [[carlink-cli]]: a K-line ECU silent to 03 counts as "no codes" only when its PID 01 counts zero.
+
+## [2026-11-08] research | Kona power states
+Source: raw/hyundai-kona-electric-erg-power-button.md (Hyundai's Kona Electric Emergency Response Guide). [[kona-electric-2020]] gained the
+OFF → ACC → ON → OFF button cycle (no brake) vs READY (brake), used by the skill's clear step.

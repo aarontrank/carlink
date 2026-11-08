@@ -152,6 +152,10 @@ module (Kona), also name the system: *"…and it clears the brake system's store
 
 **6.2 Clear.** Before you type `--confirm-clear-codes`, you must already have sent the 6.1 message and
 received a yes in this conversation. The person turns the engine **OFF** and the ignition **ON**.
+**Kona:** it stays as it was for the scan — READY, in Park, parking brake on. If the clear comes back
+`refused` or `not_acknowledged`, the one more try (6.3) is with the car ON but **not** READY: the person
+switches the car off, then — foot **off** the brake — presses the POWER button twice (the dashboard
+lights up; READY does not show).
 
 ```
 carlink clear --vehicle <id> --vin <VIN> --confirm-clear-codes --note "<what was repaired>"
@@ -174,7 +178,7 @@ carlink clear --vehicle <id> --vin <VIN> --confirm-clear-codes --note "<what was
 |---|---|---|
 | `cleared` | checked by a fresh scan: no codes left (a `permanent` code may still be listed; that is normal) | tell the person; do every `next_steps` item (Hondas: idle learn) |
 | `codes_remain` | codes came straight back from a module that accepted the clear | the fault is still there: go back to diagnosis. **Do not clear again** |
-| `refused` / `not_acknowledged` | a module refused or did not take the clear | check engine off / ignition on / car stopped, then you may run the clear **once** more |
+| `refused` / `not_acknowledged` | a module refused or did not take the clear | check engine off / ignition on / car stopped (Kona: switch to ON, not READY — see 6.2), then you may run the clear **once** more |
 | `unverified` | sent, but the result could not be checked | **do not clear again.** Wait a minute, run `carlink scan` |
 
 **6.4 Is it fixed?** Not right after clearing. For engine codes, it is fixed when, after normal
@@ -275,7 +279,8 @@ factory tool (Honda HDS / Hyundai GDS). Say so plainly when asked.
 ## Practice without a car
 
 `--port sim:odyssey-2016` (also `sim:odyssey-2016:can29`, `sim:crv-2004`, `sim:kona-ev-2020`); add
-`:engine-off`, `:ignition-off` or `:not-in-car` to rehearse those situations. Practice runs are saved
+`:engine-off`, `:ignition-off` or `:not-in-car` to rehearse those situations (they combine, e.g.
+`sim:odyssey-2016:can29:engine-off`). Practice runs are saved
 to a separate practice history. Each command starts the simulated car fresh, so codes you cleared are
 back on the next command, and its engine speed never changes — that is the simulator, not the car. Never present simulator output as the
 person's car (rule 6).
