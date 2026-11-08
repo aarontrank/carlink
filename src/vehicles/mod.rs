@@ -41,6 +41,8 @@ pub struct Profile {
     pub after_clear: &'static [&'static str],
     /// Modules whose trouble codes carlink reads (and can clear) beyond the emissions codes.
     pub modules: &'static [crate::uds::Module],
+    /// Why OBD service 04 must not be used on this car, if it must not.
+    pub obd_clear_refused: Option<&'static str>,
     #[serde(skip)]
     known_dtcs: &'static [KnownDtc],
     #[serde(skip)]

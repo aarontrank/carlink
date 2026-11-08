@@ -2,7 +2,7 @@
 title: 2016 Honda Odyssey (J35Z8, VCM, 6AT)
 type: entity
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 sources:
   - raw/nhtsa/recalls-honda-odyssey-2016.json
   - raw/nhtsa/complaints-honda-odyssey-2016.json
@@ -44,7 +44,7 @@ the VIN on this CAN car.
 
 | Item | Value | Confidence |
 |---|---|---|
-| Protocol | **ISO 15765-4 CAN, 11-bit, 500 kbit/s** (`ATSP6`) for generic OBD. Honda's own diagnostics use **29-bit** physical addressing (`18DA<tgt>F1` / `18DAF1<tgt>`, `ATSP7`) on the same pins 6/14 | community (Honda moved to CAN in 2008+; 29-bit scheme documented by openpilot/opendbc and forum PIDs) |
+| Protocol | **Contradicted 2026-11-08 ([[odyssey-2016-modules]]):** OBDb captures of 2011–2015 Odysseys answered generic OBD on **29-bit** CAN from `18DAF111` (engine) and `18DAF11D` (transmission); carlink handles both. Settle it with `carlink probe` on the van (`ATDPN` A6 = 11-bit, A7 = 29-bit). Original text: **ISO 15765-4 CAN, 11-bit, 500 kbit/s** (`ATSP6`) for generic OBD. Honda's own diagnostics use **29-bit** physical addressing (`18DA<tgt>F1` / `18DAF1<tgt>`, `ATSP7`) on the same pins 6/14 | community (Honda moved to CAN in 2008+; 29-bit scheme documented by openpilot/opendbc and forum PIDs) |
 | Expected generic responders | **`7E8`** (PCM). Probably **no `7E9`**: the 2011–2017 Odyssey has no separate TCM, because the PCM runs the 6AT | community — OdyClub "TCM location 2014 Ody Elite": "It is not separate, it is part of the PCM". Observe with `ATH1` + `0100` |
 | Other ECUs (29-bit, HDS addressing) | From opendbc fingerprints for the **2018+** Odyssey: `18DA28F1` VSA, `18DA30F1` EPS, `18DA53F1` SRS, `18DA60F1` gauge cluster, `18DAEFF1` gateway, `18DA1EF1` transmission, `18DA10F1` PGM-FI. These answer UDS `22 F181` (application software ID). Not confirmed on a 2016 | unverified for 2016 |
 | B-CAN / body network | Not reachable through a generic STN adapter (needs the OBDLink MX+/HDS path) | community |

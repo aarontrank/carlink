@@ -51,6 +51,16 @@ pub struct Scan {
     pub errors: Vec<String>,
 }
 
+/// Engine computer reply addresses, most likely first: 7E8 (11-bit CAN), 18DAF110 (29-bit), Honda's
+/// 18DAF111 (29-bit), 10 (K-line).
+const ENGINE_ECUS: [&str; 4] = ["7E8", "18DAF110", "18DAF111", "10"];
+
+/// The one ECU among `ecus` treated as the engine computer: its readings get bare history keys and
+/// drive the engine findings. Exactly one, so a key never belongs to two modules.
+pub fn engine_ecu<'a>(ecus: impl IntoIterator<Item = &'a str> + Clone) -> Option<&'a str> {
+    ENGINE_ECUS.iter().find_map(|e| ecus.clone().into_iter().find(|x| x == e))
+}
+
 fn by_service(msgs: Vec<Message>, sid: u8) -> impl Iterator<Item = Message> {
     msgs.into_iter().filter(move |m| m.data.first() == Some(&sid))
 }
@@ -95,7 +105,8 @@ pub fn vin<T: Transport>(a: &mut Adapter<T>) -> Result<Option<String>> {
     let msgs: Vec<Message> = by_service(a.query("0902")?, 0x49).filter(|m| m.data.get(1) == Some(&0x02)).collect();
     let mut ecus: Vec<&str> = msgs.iter().map(|m| m.ecu.as_str()).collect();
     ecus.dedup();
-    ecus.sort_by_key(|e| !matches!(*e, "7E8" | "10"));
+    let engine = engine_ecu(ecus.iter().copied());
+    ecus.sort_by_key(|e| Some(*e) != engine);
     let candidates = ecus.iter().filter_map(|ecu| {
         let mine: Vec<&Message> = msgs.iter().filter(|m| m.ecu == *ecu).collect();
         let payload: Vec<u8> = if a.bus().is_can() {
@@ -220,7 +231,7 @@ mod tests {
     use crate::sim::Sim;
 
     fn run(vehicle: &str) -> Scan {
-        let mut a = Adapter::connect(Sim::new(vehicle).unwrap()).unwrap();
+        let mut a = Adapter::connect(Sim::from_spec(vehicle).unwrap()).unwrap();
         scan(&mut a).unwrap()
     }
 
@@ -345,6 +356,22 @@ mod tests {
         let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
         assert_eq!(s.battery_voltage, None);
         assert!(!s.dtcs.is_empty());
+    }
+
+    #[test]
+    fn a_29_bit_honda_is_scanned_with_its_engine_computer_recognised() {
+        let s = run("odyssey-2016:can29");
+        assert_eq!(s.ecus, vec!["18DAF111", "18DAF11D"]);
+        assert_eq!(s.vin.as_deref(), Some("5FNRL5H60GB000001"));
+        assert!(s.dtcs.iter().any(|d| d.code == "P0303" && d.ecu == "18DAF111"));
+        assert!(s.codes_complete, "{:?}", s.errors);
+    }
+
+    #[test]
+    fn exactly_one_engine_ecu_is_chosen() {
+        assert_eq!(engine_ecu(["18DAF111", "18DAF110"]), Some("18DAF110"));
+        assert_eq!(engine_ecu(["18DAF11D", "18DAF111"]), Some("18DAF111"));
+        assert_eq!(engine_ecu(["7EB", "7EC"]), None);
     }
 
     #[test]

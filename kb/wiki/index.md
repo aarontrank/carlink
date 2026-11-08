@@ -2,7 +2,7 @@
 title: Index
 type: index
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 ---
 
 # Index
@@ -19,6 +19,10 @@ updated: 2026-11-07
 - [[kona-ev-other-ecus]] — VMCU, TPMS, odometer, HVAC, OBC/LDC
 - [[kona-ev-battery-health]] — SOH, deterioration, cell-imbalance thresholds
 - [[kona-ev-recalls]] — recalls (21V-127 pack replacement, 26V-728 open), TSBs
+- [[kona-ev-modules]] — the 1st-gen Kona's diagnostic modules, CAN IDs and DTC protocol each speaks
+- [[odyssey-2016-modules]] — only the PCM is reachable; generic OBD likely on 29-bit CAN
+- [[crv-2004-modules]] — only the PCM is reachable; ABS/SRS need Honda's tool or blink codes
+- [[honda-mode06]] — service 06 on the Hondas: Odyssey misfire counters, CR-V K-line tests
 - [[honda-common-dtcs]] — common codes and failure patterns for both Hondas
 
 ## Protocols & commands
@@ -28,6 +32,9 @@ updated: 2026-11-07
 - [[adapter-safety]] — commands carlink must never send
 - [[obd2-services]] — SAE J1979 services 01–0A
 - [[obd2-pids]] — service 01 PID formulas
+- [[obd2-pids-extended]] — O2, wideband, catalyst-temperature, EVAP, pedal, torque PIDs and enums
+- [[obd2-mode06]] — service 06 on CAN and K-line: records, MIDs, TIDs, UASID scaling, verdicts
+- [[uds-module-dtcs]] — reading and clearing module codes (UDS 19/14, KWP 18/14), and what not to clear
 - [[readiness-monitors]] — PID 01 bit layout and inspection rules
 - [[dtc-format]] — DTC encoding on CAN vs K-line
 - [[clearing-codes]] — what service 04 erases and the consequences
@@ -46,4 +53,5 @@ evDash and OBDb Kona sources, NHTSA recall/complaint JSON, 2004 CR-V service man
 memos). Pages cite them in their `sources` frontmatter.
 
 ## Analyses
+- [[live-data-interpretation]] — λ/O2, catalyst, MAF/load and fuel-trim tests for a shop
 _(scan findings from the real cars go here)_

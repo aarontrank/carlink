@@ -24,3 +24,20 @@ Created: [[obdlink-ex]], [[macos-serial-setup]], [[elm327-at-commands]], [[stn-s
 ## [2026-11-07] move | Wiki moved into the carlink repo
 Moved from `~/wikikb/vehicle-diagnostics/` to `~/carlink/kb/` so it is versioned with the code.
 Content unchanged; [[carlink-cli]] and `schema.md` note the new home.
+
+## [2026-11-08] research | Service 06, extended PIDs, live-data interpretation
+Sources: CARB 13 CCR 1968.2, ISO 15031-5 sample, Snap-on Global OBD manual, Honda "Mode $06 Test
+Information: All 2005 Hondas", Toyota emulator captures, OBDb, trade articles. Created: [[obd2-mode06]],
+[[honda-mode06]], [[obd2-pids-extended]], [[live-data-interpretation]].
+
+## [2026-11-08] research | Module trouble codes (UDS/KWP) and per-car module maps
+Sources: projectgus Kona CAN logs (Car Scanner reads/clears), OBDb Kona/Odyssey/Pilot captures,
+opendbc, OVMS, ISO 14229/14230 samples, Hyundai TSB 23-01-073H-1, Honda job aid 06932, 2004 CR-V
+service manual. Created: [[uds-module-dtcs]], [[kona-ev-modules]], [[odyssey-2016-modules]],
+[[crv-2004-modules]]. Contradictions flagged on [[kona-electric-2020]], [[kona-ev-resets]] and
+[[odyssey-2016]] (see the notes added there).
+
+## [2026-11-08] update | carlink hardening pass
+[[carlink-cli]] rewritten for the new commands and protocol handling; [[diagnostic-thresholds]]
+charging rows aligned with carlink's findings.
+

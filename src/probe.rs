@@ -18,6 +18,8 @@ pub struct Check {
 pub struct Probe {
     /// True when carlink can diagnose this car (a missing VIN does not make it false).
     pub ok: bool,
+    /// The built-in simulator, not a real car.
+    pub simulated: bool,
     pub checks: Vec<Check>,
     pub adapter: Option<AdapterInfo>,
     pub battery_voltage: Option<f64>,
@@ -38,7 +40,7 @@ fn fail(name: &'static str, e: &anyhow::Error, fallback: &'static str) -> Check 
 const MIN_PORT_VOLTAGE: f64 = 8.0;
 
 pub fn probe<T: Transport>(t: T) -> Probe {
-    let mut p = Probe { ok: false, checks: vec![], adapter: None, battery_voltage: None, vin: None, vehicle: None };
+    let mut p = Probe { ok: false, simulated: t.simulated(), checks: vec![], adapter: None, battery_voltage: None, vin: None, vehicle: None };
     let mut a = match Adapter::open(t) {
         Ok(a) => a,
         Err(e) => {
@@ -95,7 +97,7 @@ mod tests {
     #[test]
     fn healthy_setup_passes_every_check() {
         let p = probe(Sim::new("odyssey-2016").unwrap());
-        assert!(p.ok);
+        assert!(p.ok && p.simulated);
         assert_eq!(names(&p), vec![("adapter", true), ("power_at_obd_port", true), ("vehicle", true), ("vin", true)]);
         assert_eq!(p.vehicle.unwrap().id, "odyssey-2016");
     }

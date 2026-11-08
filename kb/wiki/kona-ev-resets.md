@@ -2,7 +2,7 @@
 title: Kona Electric — resets and relearns without dealer tools
 type: procedure
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 sources:
   - raw/kona-ev-community-notes-2026-11-07.md
   - raw/obdb-hyundai-kona-electric.md
@@ -53,6 +53,10 @@ writes) are **dealer GDS tasks**, and `carlink` does not perform them.
 
 ## Clearing DTCs (Service 04 semantics `verified`; Kona ECU list `community`)
 
+- **Contradicted 2026-11-08 ([[kona-ev-modules]], [[uds-module-dtcs]] §8):** on a bench Kona only the
+  BMS acknowledged service 04; the VCU, MCU and OBC refused. Because the BMS's codes are the evidence
+  Hyundai's battery campaign 9A4 uses, carlink never sends 04 on this car and never clears the BMS.
+  Original text follows.
 - Generic **Service 04** sent to `7DF` clears emission-related DTCs and freeze frames in the ECUs
   that implement OBD-II services. On this car those are the **MCU (7E3) and BMS (7E4)** (OBDb
   service01 support data). See [[clearing-codes]] and [[obd2-services]].

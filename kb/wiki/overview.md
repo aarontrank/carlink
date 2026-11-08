@@ -2,7 +2,7 @@
 title: Overview
 type: overview
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 ---
 
 # Overview
@@ -42,14 +42,31 @@ Reset/relearn procedures are owner-performed on the car, except clearing codes
 ([[honda-maintenance-minder]], [[odyssey-2016-tpms-calibration]], [[honda-idle-relearn]],
 [[kona-ev-resets]]); the full list is in [[honda-common-dtcs]] and the per-car pages.
 
+## Beyond the engine computer (added 2026-11-08)
+- **Self-test results (service 06)** are the shop's best misfire tool on CAN cars: per-cylinder
+  misfire counts (MIDs A2–A7 on the Odyssey) and each monitor's value against its limits
+  ([[obd2-mode06]], [[honda-mode06]]). The CR-V's K-line version has no misfire data.
+- **Module trouble codes**: the Kona's 14 diagnosable modules answer UDS `19 02` or KWP `18 00 FF 00`
+  ([[uds-module-dtcs]], [[kona-ev-modules]]). Its airbag module only serves codes in a non-default
+  session. On both Hondas nothing beyond the PCM is reachable with this adapter
+  ([[odyssey-2016-modules]], [[crv-2004-modules]]).
+- **What must not be cleared**: on the Kona, OBD service 04 reaches the BMS, whose codes Hyundai's
+  battery campaign 9A4 uses to decide on pack replacement; airbag and smart-key modules stay read-only
+  ([[uds-module-dtcs]] §8).
+- **Live-data interpretation** for a shop (λ/O2, catalyst, fuel-trim idle vs 2,500 rpm, load):
+  [[live-data-interpretation]], with the extra PIDs in [[obd2-pids-extended]].
+
 ## Open questions (resolve on the first real scans)
 - Does the CR-V return a VIN over 0902? Which protocol does `ATDPN` report?
-- Which ECUs answer on the Odyssey (7E8 only, or 7E9 too)? Its monitor set? ATF temp via
-  `18DA1DF1 222201` (29-bit, not implemented in carlink)?
-- Kona: does the VIN read? Does BMS multi-frame work without `ATFCSM1`? Rear TPMS left/right order?
+- Odyssey: 11-bit (`7E8`) or 29-bit (`18DAF111`/`18DAF11D`) generic OBD? Its service 06 MID set?
+- Kona: do the module reads, explicit flow control and the `ATAR` restore behave as in the
+  third-party captures? Rear TPMS left/right order?
 - Does the Odyssey use smart charging (low running voltage would then be normal)?
 
 ## Contradictions and tensions
 - Kona VMCU speed decode: evDash and OBDb disagree; carlink does not use VMCU speed.
 - Kona TPMS rear-left/right byte order disputed; carlink labels them `rear_a`/`rear_b`.
 - Odyssey crank pattern learn steps come from other Honda models.
+- 2026-11-08: the module research contradicted three earlier pages (Kona service 03/04/VIN, Kona
+  service 04 scope, Odyssey protocol); the notes are on [[kona-electric-2020]], [[kona-ev-resets]] and
+  [[odyssey-2016]].

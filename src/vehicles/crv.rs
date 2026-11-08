@@ -6,7 +6,7 @@ const IDLE_LEARN: &[&str] = &[
     "All electrical loads off (A/C, lights, rear defroster).",
     "Start the engine, hold 3,000 rpm in Park/Neutral until the radiator fan comes on or coolant reaches 90 °C (194 °F).",
     "Let it idle 5 minutes without touching anything (time with the fan running does not count).",
-    "Optional: run `carlink scan --vehicle crv-2004 --no-save` to confirm idle rpm and coolant temperature.",
+    "Optional: check idle rpm and coolant temperature with `carlink watch --vehicle crv-2004 --keys rpm,coolant_temp --samples 30 --interval-ms 1000`.",
 ];
 
 pub const PROFILE: Profile = Profile {
@@ -23,8 +23,8 @@ pub const PROFILE: Profile = Profile {
     notes: &[
         "ISO 9141-2 K-line; only the PCM (header 48 6B 10) answers. Protocol search takes several seconds.",
         "No separate TCM: transmission faults appear as P0700 plus the specific P07xx from the PCM.",
-        "ABS, SRS and body modules are not reachable with a generic adapter.",
-        "VIN over OBD (0902) may not work; pass --vehicle crv-2004.",
+        "ABS and airbag (SRS) codes cannot be read by carlink or any generic adapter: they need a Honda-capable scan tool or the service manual's SCS blink-code procedure.",
+        "VIN over OBD (0902) may not work: always pass --vehicle crv-2004 --vin <VIN>.",
         "Maintenance: timing chain (no belt); valve clearance check at 110k mi; plugs 110k; ATF Honda DW-1 only; Type 2 coolant; 5W-20 oil.",
         "A/C blowing warm is a known compressor failure pattern (bulletin 09-076) with no OBD code.",
     ],
@@ -32,6 +32,7 @@ pub const PROFILE: Profile = Profile {
         "Clearing also reset the PCM's learned idle: do the idle learn now (`carlink resets --vehicle crv-2004`, \"Idle learn\") before the car leaves.",
     ],
     modules: &[],
+    obd_clear_refused: None,
     known_dtcs: &[
         KnownDtc { code: "P1457", note: "EVAP leak at the canister side: usually the canister vent shut valve or a clogged purge line (Honda bulletin 08-016). Replace the valve, then smoke-test the EVAP system. Not urgent to drive." },
         KnownDtc { code: "P2646", note: "VTEC oil pressure switch reports wrong state (bulletin 13-021). Check oil level and condition first; then replace the switch (37250-PNE-G01). Safe to drive short-term." },

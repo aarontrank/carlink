@@ -2,7 +2,7 @@
 title: 2020 Hyundai Kona Electric
 type: entity
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 sources:
   - raw/obdb-hyundai-kona-electric.md
   - raw/evdash-carkiaeniro-src.md
@@ -44,9 +44,9 @@ about 100 kW, and an AC OBC. Diagnosed with the [[obdlink-ex]] through `carlink`
 | Which ECUs answer `7DF`? | 7E3 and 7E4. No 7E8/7E0 "engine" ECU. A scanner expecting 7E8 can report "no ECU" or fail to read the VIN, which matches owner reports of generic scanners "not supporting" the car. | community / inference |
 | Service 01 PID 0D speed, 0C rpm, 05 coolant, etc. | Not in OBDb's supported list for any year. Expect `NO DATA`. Read speed from 7E2 `2101` instead. | community |
 | Readiness monitors | PID 0101 is answered, so the bitfield exists. No source lists which monitors this car marks as supported. On an EV the combustion monitors (catalyst, O2, EVAP, EGR, misfire, fuel) should read *not supported*; comprehensive components is the likely exception. **Unverified:** decode whatever comes back and record it on the car. | unverified |
-| Service 03 | Expected to return emission-related **stored** DTCs from 7E3/7E4, typically P0Axx/P1xxx hybrid/EV codes. Faults in body, chassis and TPMS modules are not visible through generic 03. No source documents the Kona's actual 03 behaviour. | unverified (inference from Service 01 support) |
-| Service 04 | Clears emission DTCs in 7E3/7E4 only. See [[kona-ev-resets]] and [[clearing-codes]]. | verified (semantics) |
-| Service 09 VIN | Not documented by any source for this car. One owner reported that a generic scan tool could not read the VIN. | unverified |
+| Service 03 | **Contradicted 2026-11-08 ([[kona-ev-modules]]):** in real captures 03/07 were answered by 7EA, 7EB, 7EC and 7ED. Original text: Expected to return emission-related **stored** DTCs from 7E3/7E4, typically P0Axx/P1xxx hybrid/EV codes. Faults in body, chassis and TPMS modules are not visible through generic 03. No source documents the Kona's actual 03 behaviour. | unverified (inference from Service 01 support) |
+| Service 04 | **Contradicted 2026-11-08 ([[kona-ev-modules]]):** on a bench only the BMS (7EC) answered `44`; the others refused `7F 04 22`. carlink never sends 04 on this car (battery-campaign evidence, [[uds-module-dtcs]] §8). Original text: Clears emission DTCs in 7E3/7E4 only. See [[kona-ev-resets]] and [[clearing-codes]]. | verified (semantics) |
+| Service 09 VIN | **Settled 2026-11-08 ([[kona-ev-modules]]):** only the BMS answers, with the placeholder `OSEV__ BMS `, not a VIN — ask the user for it. Original text: Not documented by any source for this car. One owner reported that a generic scan tool could not read the VIN. | unverified |
 | PID `015B` (hybrid/EV battery pack remaining life) | Standard J1979 PID, `100/255 × A` % (raw/wikipedia-obd2-pids-2026-11-07.wikitext). The BMS answers it. No source says whether it tracks BMS SOC or displayed SOC, so compare it on the car. Prefer 220101 p4 / 220105 p31, which have 0.5 % resolution. | community (support) / unverified (meaning) |
 
 ## Key numbers (from [[kona-ev-bms-pids]])

@@ -91,13 +91,23 @@ impl Target {
     }
 }
 
-fn engine_has_codes(before: &Report) -> bool {
-    before.scan.dtcs.iter().any(|d| d.kind != "permanent") || before.scan.monitors.iter().any(|m| m.status.mil_on)
+/// The one rule for which codes a clear acts on: engine codes that are not only permanent (a clear
+/// cannot remove those), and module codes in any failed state.
+fn codes_that_count(t: Target, r: &Report) -> Vec<String> {
+    match t {
+        Target::Engine => r.scan.dtcs.iter().filter(|d| d.kind != "permanent").map(|d| d.code.clone()).collect(),
+        Target::Module(m) => r.modules.iter().filter(|x| x.name == m.name).flat_map(|x| &x.dtcs).filter(|d| d.state != "not_failed").map(|d| d.code.clone()).collect(),
+    }
 }
 
+fn engine_has_codes(before: &Report) -> bool {
+    !codes_that_count(Target::Engine, before).is_empty() || before.scan.monitors.iter().any(|m| m.status.mil_on)
+}
+
+/// Modules that hold codes (whether or not carlink may clear them).
 fn modules_with_codes(before: &Report) -> Vec<&'static Module> {
     let modules: &'static [Module] = before.vehicle.map(|v| v.modules).unwrap_or(&[]);
-    modules.iter().filter(|m| before.modules.iter().any(|r| r.name == m.name && r.dtcs.iter().any(|d| d.state != "not_failed"))).collect()
+    modules.iter().filter(|m| !codes_that_count(Target::Module(m), before).is_empty()).collect()
 }
 
 /// `--only` → targets. Empty means the engine/emissions codes only, and only if there are any (clearing
@@ -105,6 +115,7 @@ fn modules_with_codes(before: &Report) -> Vec<&'static Module> {
 /// module that has codes): the person must agree to each system by name, and some are safety systems.
 pub fn resolve_targets(before: &Report, only: &[String]) -> Result<Vec<Target>> {
     let modules: &'static [Module] = before.vehicle.map(|v| v.modules).unwrap_or(&[]);
+    let engine_refused = before.vehicle.and_then(|v| v.obd_clear_refused);
     let named = !only.is_empty() && !only.iter().any(|n| n.eq_ignore_ascii_case("all"));
     if !named && !before.codes_complete {
         return Err(problem(
@@ -113,11 +124,13 @@ pub fn resolve_targets(before: &Report, only: &[String]) -> Result<Vec<Target>> 
             "Run `carlink scan` again. If the code read keeps failing, name what to clear with --only (e.g. --only engine).",
         ));
     }
+    let engine = engine_has_codes(before) && engine_refused.is_none();
     if only.is_empty() {
-        return Ok(engine_has_codes(before).then_some(Target::Engine).into_iter().collect());
+        return Ok(engine.then_some(Target::Engine).into_iter().collect());
     }
     if only.iter().any(|n| n.eq_ignore_ascii_case("all")) {
-        return Ok(engine_has_codes(before).then_some(Target::Engine).into_iter().chain(modules_with_codes(before).into_iter().map(Target::Module)).collect());
+        let clearable = modules_with_codes(before).into_iter().filter(|m| m.clearable).map(Target::Module);
+        return Ok(engine.then_some(Target::Engine).into_iter().chain(clearable).collect());
     }
     let mut seen: Vec<String> = Vec::new();
     only.iter()
@@ -129,7 +142,17 @@ pub fn resolve_targets(before: &Report, only: &[String]) -> Result<Vec<Target>> 
         })
         .map(|name| {
             if name.eq_ignore_ascii_case("engine") {
-                return Ok(Target::Engine);
+                return match engine_refused {
+                    Some(why) => Err(problem("clear_not_allowed", format!("carlink will not send the OBD clear here: {why}"), "Clear the affected module by name instead (see modules[] in the scan), or leave it to the dealer.")),
+                    None => Ok(Target::Engine),
+                };
+            }
+            if let Some(m) = modules.iter().find(|m| m.name.eq_ignore_ascii_case(name) && !m.clearable) {
+                return Err(problem(
+                    "clear_not_allowed",
+                    format!("carlink does not clear the {} module ({})", m.name, m.description),
+                    "Its codes are evidence a dealer needs (battery campaign, airbag, smart key). Leave them for the factory tool.",
+                ));
             }
             modules.iter().find(|m| m.name.eq_ignore_ascii_case(name)).map(Target::Module).ok_or_else(|| {
                 let valid: Vec<&str> = ["engine", "all"].into_iter().chain(modules.iter().map(|m| m.name)).collect();
@@ -225,10 +248,18 @@ pub fn clear_with_history<T: Transport>(a: &mut Adapter<T>, db: &Store, ident: &
     check_engine_off(a, before.vehicle.is_some_and(|v| v.powertrain == Powertrain::Ev))?;
     let targets = resolve_targets(&before, only)?;
     if targets.is_empty() {
-        let pending: Vec<String> = modules_with_codes(&before).iter().map(|m| format!("{} ({})", m.name, m.description)).collect();
-        let mut steps = vec!["There are no engine/emissions codes, so nothing was sent (clearing would only reset the readiness monitors).".to_string()];
-        if !pending.is_empty() {
-            steps.push(format!("These modules have codes: {}. To clear one, tell the person which system it is, get their yes, and run the clear again with --only <NAME>.", pending.join(", ")));
+        let with_codes = modules_with_codes(&before);
+        let clearable: Vec<String> = with_codes.iter().filter(|m| m.clearable).map(|m| format!("{} ({})", m.name, m.description)).collect();
+        let read_only: Vec<String> = with_codes.iter().filter(|m| !m.clearable).map(|m| format!("{} ({})", m.name, m.description)).collect();
+        let mut steps = vec![match (engine_has_codes(&before), before.vehicle.and_then(|v| v.obd_clear_refused)) {
+            (true, Some(why)) => format!("Nothing was sent. There are engine/emissions codes, but carlink does not send the OBD clear on this car: {why}."),
+            _ => "There are no engine/emissions codes, so nothing was sent (clearing would only reset the readiness monitors).".to_string(),
+        }];
+        if !clearable.is_empty() {
+            steps.push(format!("These modules have codes carlink can clear: {}. To clear one, tell the person which system it is, get their yes, and run the clear again with --only <NAME>.", clearable.join(", ")));
+        }
+        if !read_only.is_empty() {
+            steps.push(format!("These modules have codes carlink never clears (dealer evidence): {}.", read_only.join(", ")));
         }
         return Ok(json!({"clear_status": "nothing_to_clear", "next_steps": steps, "vehicle": identity(&before), "codes_before": before.codes}));
     }
@@ -254,7 +285,7 @@ pub fn clear_with_history<T: Transport>(a: &mut Adapter<T>, db: &Store, ident: &
         .zip(&sent)
         .map(|(t, s)| {
             let (status, remaining) = target_status(*t, s, after.as_ref());
-            json!({"target": s.target, "status": status, "codes_remaining": remaining, "acknowledged_by": s.acknowledged_by, "refused": s.refused})
+            json!({"target": s.target, "status": status, "codes_before": codes_that_count(*t, &before), "codes_remaining": remaining, "acknowledged_by": s.acknowledged_by, "refused": s.refused})
         })
         .collect();
     let status = SEVERITY_ORDER.iter().find(|st| results.iter().any(|r| r["status"] == **st)).copied().unwrap_or("unverified");
@@ -300,9 +331,6 @@ pub fn clear_with_history<T: Transport>(a: &mut Adapter<T>, db: &Store, ident: &
         "next_steps": next_steps,
         "vehicle": identity(&before),
         "targets": results,
-        "codes_before": before.codes,
-        "codes_after": after.as_ref().map(|r| &r.codes),
-        "modules_after": after.as_ref().map(|r| r.modules.iter().map(|m| json!({"name": m.name, "codes": m.dtcs.iter().map(|d| &d.code).collect::<Vec<_>>()})).collect::<Vec<_>>()),
         "problems": problems,
         "pre_clear_session_id": before_id,
         "post_clear_session_id": post_clear_session_id,
@@ -464,7 +492,8 @@ mod tests {
         let mut a = Adapter::connect(Sim::from_spec("crv-2004:engine-off").unwrap()).unwrap();
         let out = clear_with_history(&mut a, &db, &ident("crv-2004"), &[], None).unwrap();
         assert_eq!(out["clear_status"], "cleared");
-        assert_eq!(out["codes_after"], json!([]));
+        assert_eq!(out["targets"][0]["codes_before"], json!(["P0420", "P1457"]));
+        assert_eq!(out["targets"][0]["codes_remaining"], json!([]));
         assert_eq!(out["targets"][0]["acknowledged_by"], json!(["10"]));
         assert_eq!(out["vehicle"]["key"], CRV_VIN);
         assert!(out["next_steps"].as_array().unwrap().iter().any(|s| s.as_str().unwrap().contains("idle learn")));
@@ -476,11 +505,34 @@ mod tests {
     #[test]
     fn functional_addressing_is_reasserted_right_before_the_clear() {
         let db = Store::open_in_memory().unwrap();
-        let mut a = adapter("kona-ev-2020");
-        let out = clear_with_history(&mut a, &db, &ident("kona-ev-2020"), &only(&["engine"]), None).unwrap();
+        let mut a = Adapter::connect(Sim::from_spec("odyssey-2016:engine-off").unwrap()).unwrap();
+        clear_with_history(&mut a, &db, &Ident::default(), &[], None).unwrap();
         let log = a.transport().log.join(" ");
         assert!(log.contains("ATFCSM0 ATAR ATSH7DF 04"), "{log}");
+    }
+
+    #[test]
+    fn an_explicit_engine_clear_without_codes_says_it_only_reset_readiness() {
+        let db = Store::open_in_memory().unwrap();
+        let mut sim = Sim::from_spec("crv-2004:engine-off").unwrap();
+        sim.set_stored(0x10, &[]);
+        let out = clear_with_history(&mut Adapter::connect(sim).unwrap(), &db, &ident("crv-2004"), &only(&["engine"]), None).unwrap();
         assert!(out["next_steps"][0].as_str().unwrap().contains("no engine codes"), "{out}");
+    }
+
+    #[test]
+    fn kona_refuses_the_obd_clear_and_read_only_modules() {
+        let db = Store::open_in_memory().unwrap();
+        for name in ["engine", "BMS", "SRS", "SMK"] {
+            let err = clear_with_history(&mut adapter("kona-ev-2020"), &db, &ident("kona-ev-2020"), &only(&[name]), None).unwrap_err();
+            assert_eq!(kind(err), "clear_not_allowed", "{name}");
+        }
+        let mut a = adapter("kona-ev-2020");
+        a.transport_mut().add_module(0x7EC, false, &[([0x0A, 0x0A, 0x12], 0x08)]);
+        let out = clear_with_history(&mut a, &db, &ident("kona-ev-2020"), &only(&["all"]), None).unwrap();
+        let targets: Vec<&str> = out["targets"].as_array().unwrap().iter().map(|t| t["target"].as_str().unwrap()).collect();
+        assert_eq!(targets, vec!["IEB"], "`all` skips the BMS and never sends 04 on the Kona");
+        assert!(!a.transport().log.contains(&"04".to_string()));
     }
 
     #[test]
@@ -541,6 +593,7 @@ mod tests {
         let out = clear_with_history(&mut a, &db, &ident("kona-ev-2020"), &only(&["ieb"]), None).unwrap();
         assert_eq!(out["clear_status"], "cleared", "{out}");
         assert_eq!(out["targets"][0]["target"], "IEB");
+        assert_eq!(out["targets"][0]["codes_before"], json!(["C1611-00"]), "a module's own codes, not the engine list");
         let log = a.transport().log.join(" ");
         assert!(log.contains("ATSH7D1 ATCRA7D9 ATFCSH7D1 ATFCSD300000 ATFCSM1 14FFFFFF"), "{log}");
         assert!(!a.transport().log.contains(&"04".to_string()));
@@ -552,6 +605,19 @@ mod tests {
         let mut a = adapter("kona-ev-2020");
         let out = clear_with_history(&mut a, &db, &ident("kona-ev-2020"), &only(&["all"]), None).unwrap();
         assert_eq!(out["targets"].as_array().unwrap().iter().map(|t| t["target"].as_str().unwrap()).collect::<Vec<_>>(), vec!["IEB"]);
+    }
+
+    #[test]
+    fn kona_with_battery_codes_says_why_nothing_was_sent() {
+        let db = Store::open_in_memory().unwrap();
+        let mut sim = Sim::new("kona-ev-2020").unwrap();
+        sim.silence(0x7D9);
+        sim.set_stored(0x7EC, &[0x0AA6]);
+        sim.add_module(0x7EC, false, &[([0x0A, 0xA6, 0x00], 0x08)]);
+        let out = clear_with_history(&mut Adapter::connect(sim).unwrap(), &db, &ident("kona-ev-2020"), &[], None).unwrap();
+        assert_eq!(out["clear_status"], "nothing_to_clear");
+        let steps = out["next_steps"].to_string();
+        assert!(steps.contains("does not send the OBD clear") && steps.contains("never clears") && steps.contains("BMS"), "{steps}");
     }
 
     #[test]
@@ -594,7 +660,7 @@ mod tests {
     fn a_module_that_refuses_the_verification_read_is_unverified() {
         let db = Store::open_in_memory().unwrap();
         let mut a = adapter("kona-ev-2020");
-        a.transport_mut().inject_where(0x7D1, Some("14FFFFFF"), "1902FF", "7D9 03 7F 19 22");
+        a.transport_mut().inject_where(0x7D1, Some("14FFFFFF"), "190208", "7D9 03 7F 19 22");
         let out = clear_with_history(&mut a, &db, &ident("kona-ev-2020"), &only(&["IEB"]), None).unwrap();
         assert_eq!(out["clear_status"], "unverified", "{out}");
     }
@@ -603,9 +669,10 @@ mod tests {
     fn a_module_read_over_kwp_is_cleared_over_kwp() {
         let db = Store::open_in_memory().unwrap();
         let mut sim = Sim::new("kona-ev-2020").unwrap();
-        sim.add_module(0x7BB, true, &[([0x96, 0x20, 0x00], 0xA0)]);
+        sim.add_module_with(0x7EA, crate::sim::ModuleSim { kwp: true, kwp_nrc: 0x12, dtcs: vec![([0x1A, 0x78, 0x00], 0x60)], ..Default::default() });
         let mut a = Adapter::connect(sim).unwrap();
-        clear_with_history(&mut a, &db, &ident("kona-ev-2020"), &only(&["HVAC"]), None).unwrap();
+        let out = clear_with_history(&mut a, &db, &ident("kona-ev-2020"), &only(&["VCU"]), None).unwrap();
+        assert_eq!(out["clear_status"], "cleared", "{out}");
         assert!(a.transport().log.contains(&"14FF00".to_string()));
         assert!(!a.transport().log.contains(&"14FFFFFF".to_string()));
     }

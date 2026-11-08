@@ -57,6 +57,8 @@ pub fn watch<T: Transport>(a: &mut Adapter<T>, profile: Option<&Profile>, keys: 
     }
     let supported = scan::supported(a)?;
     let is_supported = |p: &u8| supported.values().any(|s| s.contains(p));
+    let engine = scan::engine_ecu(supported.keys().map(String::as_str)).map(str::to_string);
+    let engine = engine.as_deref();
     let generic: Vec<&'static str> = obd::pid_keys().filter(|k| obd::pids_for_key(k).iter().any(is_supported)).collect();
     let ev_keys: &[&str] = if profile.is_some_and(|p| p.id == "kona-ev-2020") { kona::LIVE_KEYS } else { &[] };
     let wanted: Vec<String> = if keys.is_empty() {
@@ -68,6 +70,20 @@ pub fn watch<T: Transport>(a: &mut Adapter<T>, profile: Option<&Profile>, keys: 
     let mut available: Vec<&str> = generic.iter().chain(ev_keys).copied().collect();
     available.sort();
     available.dedup();
+    if wanted.is_empty() && !available.is_empty() {
+        return Err(problem(
+            "bad_input",
+            format!("none of the default readings are reported by this car; available: {}", available.join(", ")),
+            "Pick keys from the available list and pass them with --keys. For the Kona Electric pass --vehicle kona-ev-2020 to get its battery data.",
+        ));
+    }
+    if wanted.is_empty() {
+        return Err(problem(
+            "bad_input",
+            "this car reports no live data carlink can watch",
+            "For the Kona Electric pass --vehicle kona-ev-2020 (its battery data comes from the battery module, not generic OBD).",
+        ));
+    }
     if let Some(bad) = wanted.iter().find(|k| !available.contains(&k.as_str())) {
         return Err(problem(
             "bad_input",
@@ -94,7 +110,7 @@ pub fn watch<T: Transport>(a: &mut Adapter<T>, profile: Option<&Profile>, keys: 
             match a.query(&format!("01{pid:02X}")) {
                 Ok(msgs) => {
                     let mine = msgs.iter().filter(|m| m.data.get(..2) == Some(&[0x41, pid][..]));
-                    let pick = mine.clone().find(|m| matches!(m.ecu.as_str(), "7E8" | "10")).or_else(|| mine.clone().next());
+                    let pick = mine.clone().find(|m| Some(m.ecu.as_str()) == engine).or_else(|| mine.clone().next());
                     for r in pick.map(|m| obd::decode_pid_all(pid, &m.data[2..])).unwrap_or_default() {
                         if wanted.contains(&r.key) {
                             meta.insert(r.key.clone(), (r.name, r.unit));
@@ -192,6 +208,13 @@ mod tests {
         watch(&mut a, None, &keys(&["wb_b1s1_lambda", "rpm", "wb_b1s1_ma"]), 1, Duration::ZERO).unwrap();
         let sent: Vec<&String> = a.transport().log[before..].iter().filter(|c| *c == "0134").collect();
         assert_eq!(sent.len(), 1);
+    }
+
+    #[test]
+    fn an_ev_without_its_profile_gets_a_hint_instead_of_empty_stats() {
+        let mut a = Adapter::connect(Sim::new("kona-ev-2020").unwrap()).unwrap();
+        let err = watch(&mut a, None, &[], 1, Duration::ZERO).unwrap_err();
+        assert!(crate::problem::find(&err).unwrap().what_to_do.contains("--vehicle kona-ev-2020"));
     }
 
     #[test]

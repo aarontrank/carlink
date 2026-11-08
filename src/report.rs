@@ -171,6 +171,16 @@ pub fn build<T: Transport>(a: &mut Adapter<T>, ident: &Ident) -> Result<Report> 
 
 fn module_findings(modules: &[ModuleReport]) -> Vec<Finding> {
     let mut out = Vec::new();
+    let silent: Vec<String> = modules.iter().filter(|m| !m.responded && m.error.is_none()).map(|m| format!("{} ({})", m.name, m.description)).collect();
+    if !silent.is_empty() {
+        out.push(Finding {
+            severity: Severity::Info,
+            code: None,
+            title: "Some modules did not answer".into(),
+            detail: format!("No answer from: {}.", silent.join("; ")),
+            recommendation: "Their codes are unknown — not fitted, asleep, or not readable this way. Do not tell the person they have no faults; a warning light from one of these systems needs the factory tool.".into(),
+        });
+    }
     for m in modules {
         for d in &m.dtcs {
             let severity = match d.state {
@@ -181,7 +191,11 @@ fn module_findings(modules: &[ModuleReport]) -> Vec<Finding> {
             };
             let base = d.code.split('-').next().unwrap_or(&d.code);
             let what = dtc::lookup(base).description.unwrap_or_else(|| "manufacturer-specific code".into());
-            let mut recommendation = format!("Diagnose with the factory service information for the {} module; after the repair carlink can clear it (`carlink clear --only {}`).", m.name, m.name);
+            let mut recommendation = if m.clearable {
+                format!("Diagnose with the factory service information for the {} module; after the repair, with the person's yes, carlink can clear it (`carlink clear --only {}`).", m.name, m.name)
+            } else {
+                format!("Diagnose with the factory service information. carlink does not clear the {} module: its codes are evidence the dealer needs, so leave them for the factory tool.", m.name)
+            };
             if m.name == "SRS" {
                 recommendation.insert_str(0, "Airbag fault: the airbags may not deploy in a crash. Get it repaired promptly. ");
             }
@@ -195,6 +209,18 @@ fn module_findings(modules: &[ModuleReport]) -> Vec<Finding> {
         }
         if let Some(e) = &m.error {
             out.push(Finding { severity: Severity::Info, code: None, title: format!("{} module could not be read", m.name), detail: e.clone(), recommendation: "Run the scan again; if it keeps failing, its codes are unknown.".into() });
+        }
+        if let Some(why) = &m.partial {
+            out.push(Finding { severity: Severity::Info, code: None, title: format!("{} ({}): code list may be incomplete", m.name, m.description), detail: format!("{why}."), recommendation: "The codes shown are real; run the scan again to look for the rest.".into() });
+        }
+        if let Some(why) = &m.refused {
+            out.push(Finding {
+                severity: Severity::Info,
+                code: None,
+                title: format!("{} ({}): codes not readable by carlink", m.name, m.description),
+                detail: format!("The module answered but refused: {why}."),
+                recommendation: "Do not tell the person this module has no faults; if its warning light is on, it needs the factory tool.".into(),
+            });
         }
     }
     out
@@ -228,8 +254,9 @@ fn summarize_codes(scan: &Scan, vehicle: Option<&'static Profile>) -> Vec<CodeSu
 
 impl Report {
     pub fn stored_readings(&self) -> Vec<StoredReading> {
-        // Bare keys only for the legislated engine ECU address, so a key never moves to another module.
-        let key = |k: &str, ecu: &str| if ecu == "7E8" || ecu == "10" { k.to_string() } else { format!("{k}@{ecu}") };
+        // Bare keys only for the engine ECU, so a key never moves to another module.
+        let engine = crate::scan::engine_ecu(self.scan.ecus.iter().map(String::as_str));
+        let key = |k: &str, ecu: &str| if Some(ecu) == engine { k.to_string() } else { format!("{k}@{ecu}") };
         let row = |source: &str, key: String, r: &Reading| StoredReading { source: source.into(), key, value: r.value, unit: r.unit.into() };
         let mut out = Vec::new();
         if let Some(v) = self.scan.battery_voltage {
@@ -453,6 +480,32 @@ mod tests {
         assert!(r.findings.iter().any(|f| f.title.contains("VCM")), "{:?}", r.findings);
         assert!(r.stored_readings().iter().any(|x| x.key == "misfire_cyl3_current" && x.value == 180.0));
         assert!(build_for("crv-2004", Some("crv-2004")).tests.is_none(), "K-line service 06 is only read by `carlink tests`");
+    }
+
+    #[test]
+    fn a_read_only_module_code_is_never_offered_for_clearing() {
+        let mut sim = Sim::new("kona-ev-2020").unwrap();
+        sim.add_module(0x7EC, false, &[([0x0A, 0x0A, 0x12], 0x08)]);
+        let r = build(&mut Adapter::connect(sim).unwrap(), &Ident { vehicle: Some("kona-ev-2020"), vin: None }).unwrap();
+        let f = r.findings.iter().find(|f| f.title.starts_with("BMS")).unwrap();
+        assert!(!f.recommendation.contains("carlink clear"), "{}", f.recommendation);
+    }
+
+    #[test]
+    fn modules_that_do_not_answer_are_named_as_unknown() {
+        let mut sim = Sim::new("kona-ev-2020").unwrap();
+        sim.silence(0x7D9);
+        let r = build(&mut Adapter::connect(sim).unwrap(), &Ident { vehicle: Some("kona-ev-2020"), vin: None }).unwrap();
+        let f = r.findings.iter().find(|f| f.title == "Some modules did not answer").unwrap();
+        assert!(f.detail.contains("IEB"), "{}", f.detail);
+    }
+
+    #[test]
+    fn kona_airbag_module_refusal_is_reported_not_hidden() {
+        let r = build_for("kona-ev-2020", Some("kona-ev-2020"));
+        let f = r.findings.iter().find(|f| f.title.starts_with("SRS")).unwrap();
+        assert!(f.detail.contains("diagnostic session"), "{}", f.detail);
+        assert!(r.codes_complete, "a refusal is not a failed read");
     }
 
     #[test]

@@ -16,7 +16,8 @@ pub const PROFILE: Profile = Profile {
         "18V170, 17V725, 16V932, 16V933: 2nd-row seat latches.",
     ],
     notes: &[
-        "CAN 11-bit 500k; expect the PCM at 7E8 (it also runs the transmission). Other Honda modules use 29-bit 18DAxxF1 and are unverified on a 2016.",
+        "Generic OBD answers on CAN; this generation is documented on 29-bit (engine 18DAF111, transmission 18DAF11D), possibly 11-bit 7E8 — carlink handles both.",
+        "Airbag, ABS/VSA, power steering and TPMS codes cannot be read with this adapter (no documented access on the 2011–2017 Odyssey): they need a Honda-capable scan tool.",
         "Readiness monitor set not verified; read from 0101.",
         "Clearing codes likely also wipes the crank pattern learn: do idle learn, then crank learn, then a drive cycle.",
         "Maintenance: timing belt (with water pump, plugs, valve check) is Maintenance Minder code 4, usually ~100–110k mi; ATF Honda DW-1 only; Type 2 coolant; 0W-20 oil.",
@@ -27,6 +28,7 @@ pub const PROFILE: Profile = Profile {
         "Clearing also reset the PCM's learned values: do the idle learn, then the crank pattern learn (`carlink resets --vehicle odyssey-2016`) before the van leaves.",
     ],
     modules: &[],
+    obd_clear_refused: None,
     known_dtcs: &[
         KnownDtc { code: "P0300", note: RANDOM_MISFIRE },
         KnownDtc { code: "P0301", note: VCM_MISFIRE },

@@ -8,21 +8,27 @@ use crate::obd::Reading;
 use anyhow::Result;
 use std::collections::BTreeMap;
 
-use super::{KnownDtc, Powertrain, Profile, Reset, clear_reset};
+use super::{KnownDtc, Powertrain, Profile, Reset};
 use crate::uds::{Module, Protocol};
 
-/// Diagnostic addresses documented for this car (wiki `kona-ev-other-ecus`). Reply ID = request + 8.
+/// Modules observed answering on a 1st-generation Kona Electric (wiki `kona-ev-modules`); reply ID =
+/// request + 8. Read-only: the BMS (Hyundai battery campaign 9A4 relies on its fault memory), the airbag
+/// unit, and the smart key (wiki `uds-module-dtcs` §8).
 const MODULES: &[Module] = &[
-    Module { name: "BMS", description: "high-voltage battery management", request: "7E4", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "MCU", description: "drive motor and inverter", request: "7E3", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "VCU", description: "vehicle control unit", request: "7E2", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "OBC", description: "on-board charger and 12 V converter (LDC)", request: "7E5", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "IEB", description: "brakes, ABS and stability control", request: "7D1", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "MDPS", description: "electric power steering", request: "7D4", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "BCM", description: "body control and tire-pressure monitoring (TPMS)", request: "7A0", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "IGPM", description: "body electrics: lights, doors, wipers", request: "770", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "HVAC", description: "heating, air conditioning and heat pump", request: "7B3", protocol: Protocol::Uds, confidence: "verified" },
-    Module { name: "CLUSTER", description: "instrument cluster", request: "7C6", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "BMS", description: "high-voltage battery management", request: "7E4", protocol: Protocol::Uds, confidence: "verified", clearable: false },
+    Module { name: "MCU", description: "drive motor and inverter", request: "7E3", protocol: Protocol::Kwp, confidence: "verified", clearable: true },
+    Module { name: "VCU", description: "vehicle control unit", request: "7E2", protocol: Protocol::Kwp, confidence: "verified", clearable: true },
+    Module { name: "OBC", description: "on-board charger and 12 V converter (LDC)", request: "7E5", protocol: Protocol::Kwp, confidence: "verified", clearable: true },
+    Module { name: "IEB", description: "brakes, ABS and stability control", request: "7D1", protocol: Protocol::Uds, confidence: "verified", clearable: true },
+    Module { name: "MDPS", description: "electric power steering", request: "7D4", protocol: Protocol::Uds, confidence: "verified", clearable: true },
+    Module { name: "SRS", description: "airbags (module present; carlink cannot read its codes)", request: "7D2", protocol: Protocol::Uds, confidence: "present, name assumed", clearable: false },
+    Module { name: "LKAS", description: "front camera (lane keeping)", request: "7C4", protocol: Protocol::Uds, confidence: "verified", clearable: true },
+    Module { name: "BCM", description: "body control and tire-pressure monitoring (TPMS)", request: "7A0", protocol: Protocol::Uds, confidence: "verified", clearable: true },
+    Module { name: "IGPM", description: "body electrics: lights, doors, wipers", request: "770", protocol: Protocol::Uds, confidence: "verified", clearable: true },
+    Module { name: "SMK", description: "smart key", request: "7A5", protocol: Protocol::Uds, confidence: "present, name from a sibling", clearable: false },
+    Module { name: "HVAC", description: "heating, air conditioning and heat pump", request: "7B3", protocol: Protocol::Uds, confidence: "verified", clearable: true },
+    Module { name: "SHIFTER", description: "electronic shifter (shift-by-wire)", request: "7B6", protocol: Protocol::Uds, confidence: "verified", clearable: true },
+    Module { name: "CLUSTER", description: "instrument cluster", request: "7C6", protocol: Protocol::Uds, confidence: "verified", clearable: true },
 ];
 
 pub const PROFILE: Profile = Profile {
@@ -38,20 +44,30 @@ pub const PROFILE: Profile = Profile {
         "TSB 22-EV-001H-1: motor/reduction-gear rumble.",
     ],
     notes: &[
-        "Generic OBD-II answers only from the MCU (7E3→7EB) and BMS (7E4→7EC); no RPM/speed PIDs. The VIN may not be readable, so pass --vehicle kona-ev-2020.",
+        "Generic OBD-II answers only from the MCU and BMS; no RPM/speed PIDs. The car does not report its VIN (the BMS returns a placeholder): always pass --vehicle kona-ev-2020 --vin <VIN>.",
+        "Module codes are read from 14 modules (modules[]). The airbag unit (SRS) answers but serves its codes only in a session carlink does not open: an airbag light needs the dealer tool.",
+        "carlink never sends the OBD clear (service 04) on this car, and never clears the BMS, SRS or SMK modules (battery campaign evidence, airbags, smart key). Other modules are cleared by name.",
         "Battery data comes from BMS DIDs 220101–220105; SOH stays at 100% for a long time, min deterioration moves first.",
         "Cell spread is meaningful only at ≥80% SOC after resting; a 100% AC charge rebalances.",
         "12 V battery is charged by the LDC only while READY/charging (plus Aux Battery Saver+); a dead 12 V prevents READY.",
     ],
-    after_clear: &[
-        "OBD service 04 clears only the motor controller (MCU) and battery management (BMS). Faults in brakes, airbags, TPMS or body modules are in other modules.",
-    ],
+    after_clear: &[],
     modules: MODULES,
+    obd_clear_refused: Some("on the Kona Electric, OBD service 04 is answered by the battery management module (BMS), and Hyundai's battery campaign 9A4 (TSB 23-01-073H-1) decides on pack replacement from the codes it stores; clearing them destroys that evidence"),
     known_dtcs: &[
         KnownDtc { code: "P0AA6", note: "HV isolation fault: high-voltage leakage to chassis (often coolant intrusion or a damaged HV connector/cable; on this model also check the battery recall 21V-127 status). Do not attempt repair; have a Hyundai EV-certified dealer inspect. Compare isolation_kohm in carlink history." },
     ],
     resets: &[
-        clear_reset("Clears emission codes in the MCU and BMS only. Does not reset SOH, counters, TPMS, 12 V saver, the service reminder, or codes in body modules (UDS service 19/14, not supported)."),
+        Reset {
+            name: "Clear module trouble codes (by name)",
+            carlink_can_do: true,
+            steps: &[
+                "Only after the repair: explain what clearing does, name the system (e.g. brakes), and get an explicit yes from the person (carlink skill, step 6).",
+                "Ignition ON (READY not needed).",
+                "Run `carlink clear --vehicle kona-ev-2020 --vin <VIN> --only <MODULE> --confirm-clear-codes` with the module name from the scan; read clear_status and follow next_steps.",
+            ],
+            notes: "carlink never sends the OBD clear (service 04) on this car and never clears the BMS, SRS or SMK modules: battery-campaign evidence, airbags, smart key.",
+        },
         Reset { name: "TPMS after tire rotation", carlink_can_do: false, steps: &["Inflate all tires to the door-placard pressure (cold).", "Drive above 25 mph for 10–20 minutes; the display relearns positions by itself."], notes: "Direct TPMS. New sensors or a second wheel set need a TPMS tool or dealer to register IDs." },
         Reset { name: "TPMS low-pressure light", carlink_can_do: false, steps: &["Inflate to placard pressure and drive; the light clears when sensors report the new pressure."], notes: "There is no reset button." },
         Reset { name: "Service interval reminder", carlink_can_do: false, steps: &["Cluster: User Settings → Service Interval → set/reset distance and months, confirm.", "If not in the cluster menu: head unit Setup → Vehicle → Cluster → Service Interval."], notes: "From Hyundai TSB text, not Kona-specific; confirm on the car." },

@@ -16,10 +16,8 @@ struct Ecu {
     vin: Option<&'static str>,
     /// Service 22 etc: request hex (no spaces) -> response payload.
     extra: BTreeMap<String, Vec<u8>>,
-    /// Non-emissions module codes: (3-byte DTC, UDS status byte). Answered over UDS 19/14, or KWP 18/14 when `kwp`.
-    module_dtcs: Vec<([u8; 3], u8)>,
-    module: bool,
-    kwp: bool,
+    /// A non-emissions module answering trouble-code requests (UDS 19/14, or KWP 18/14).
+    module: Option<ModuleSim>,
     /// Service 06: monitor/test ID → reply payload after the `46`.
     mode06: BTreeMap<u8, Vec<u8>>,
 }
@@ -45,6 +43,37 @@ pub struct Sim {
     /// (command, extra line) appended to the simulated reply, each used once: the command still takes effect.
     appended: Vec<(String, String)>,
     pub log: Vec<String>,
+}
+
+/// How a simulated module answers trouble-code requests (wiki `uds-module-dtcs`, `kona-ev-modules`).
+#[derive(Clone)]
+pub struct ModuleSim {
+    /// KWP2000 (`18 00 FF 00` / `14 FF 00`) instead of UDS (`19 02 mask` / `14 FF FF FF`).
+    pub kwp: bool,
+    /// What a KWP module answers to UDS 0x19 (Kona MCU/OBC: 0x11, VCU: 0x12).
+    pub kwp_nrc: u8,
+    /// UDS DTC status availability mask.
+    pub avail: u8,
+    /// Refuses (7F 19 31) a mask containing bits outside `avail`, like the Kona MDPS.
+    pub strict: bool,
+    /// Serves 0x19 only in a non-default session (7F 19 7F), like the Kona's 7D2.
+    pub session_only: bool,
+    /// (3-byte DTC, status byte); KWP modules use the first two bytes.
+    pub dtcs: Vec<([u8; 3], u8)>,
+}
+
+impl Default for ModuleSim {
+    fn default() -> Self {
+        ModuleSim { kwp: false, kwp_nrc: 0x11, avail: 0xFF, strict: false, session_only: false, dtcs: vec![] }
+    }
+}
+
+fn uds(avail: u8, dtcs: Vec<([u8; 3], u8)>) -> Option<ModuleSim> {
+    Some(ModuleSim { avail, dtcs, ..Default::default() })
+}
+
+fn kwp(nrc: u8, dtcs: Vec<([u8; 3], u8)>) -> Option<ModuleSim> {
+    Some(ModuleSim { kwp: true, kwp_nrc: nrc, dtcs, ..Default::default() })
 }
 
 struct Injection {
@@ -115,16 +144,22 @@ impl Sim {
                 },
                 Ecu { id: 0x7E9, pids: pids(&[(0x01, &[0x00, 0x04, 0x00, 0x00]), (0x0D, &[0x00])]), ..Default::default() },
             ]),
+            // Modules and their protocols as observed on a 1st-generation Kona (wiki kona-ev-modules).
             "kona-ev-2020" => (Bus::Can11, ("6", "ISO 15765-4 (CAN 11/500)"), vec![
-                Ecu { id: 0x7EB, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00])]), module: true, ..Default::default() },
-                Ecu { id: 0x7EC, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00]), (0x5B, &[0x5D])]), extra: kona::sim_extra(0x7EC), module: true, ..Default::default() },
-                Ecu { id: 0x7EA, extra: kona::sim_extra(0x7EA), module: true, ..Default::default() },
-                Ecu { id: 0x7A8, extra: kona::sim_extra(0x7A8), module: true, ..Default::default() },
-                Ecu { id: 0x7CE, extra: kona::sim_extra(0x7CE), module: true, ..Default::default() },
-                Ecu { id: 0x7D9, module: true, module_dtcs: vec![([0x56, 0x11, 0x00], 0x08)], ..Default::default() },
-                Ecu { id: 0x7DC, module: true, ..Default::default() },
-                Ecu { id: 0x778, module: true, ..Default::default() },
-                Ecu { id: 0x7BB, module: true, kwp: true, ..Default::default() },
+                Ecu { id: 0x7EB, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00])]), module: kwp(0x11, vec![]), ..Default::default() },
+                Ecu { id: 0x7EC, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00]), (0x5B, &[0x5D])]), extra: kona::sim_extra(0x7EC), module: uds(0xFF, vec![]), ..Default::default() },
+                Ecu { id: 0x7EA, extra: kona::sim_extra(0x7EA), module: kwp(0x12, vec![]), ..Default::default() },
+                Ecu { id: 0x7ED, module: kwp(0x11, vec![]), ..Default::default() },
+                Ecu { id: 0x7A8, extra: kona::sim_extra(0x7A8), module: uds(0x09, vec![]), ..Default::default() },
+                Ecu { id: 0x7CE, extra: kona::sim_extra(0x7CE), module: uds(0x09, vec![]), ..Default::default() },
+                Ecu { id: 0x7D9, module: uds(0x89, vec![([0x56, 0x11, 0x00], 0x08)]), ..Default::default() },
+                Ecu { id: 0x7DC, module: Some(ModuleSim { avail: 0x89, strict: true, ..Default::default() }), ..Default::default() },
+                Ecu { id: 0x7DA, module: Some(ModuleSim { session_only: true, ..Default::default() }), ..Default::default() },
+                Ecu { id: 0x7CC, module: uds(0x89, vec![]), ..Default::default() },
+                Ecu { id: 0x778, module: uds(0x09, vec![]), ..Default::default() },
+                Ecu { id: 0x7AD, module: uds(0x08, vec![]), ..Default::default() },
+                Ecu { id: 0x7BB, module: uds(0x09, vec![]), ..Default::default() },
+                Ecu { id: 0x7BE, module: uds(0x7F, vec![]), ..Default::default() },
             ]),
             other => bail!("unknown sim vehicle '{other}' (known: {})", VEHICLES.join(", ")),
         };
@@ -142,11 +177,19 @@ impl Sim {
                 e.pids.insert(0x0C, vec![0, 0]);
             }),
             "ignition-off" => sim.ignition_off = true,
+            "can29" if vehicle == "odyssey-2016" => {
+                // 2011–2015 Odysseys answer generic OBD on 29-bit CAN: engine 0x11, transmission 0x1D.
+                sim.bus = Bus::Can29;
+                sim.protocol = ("7", "ISO 15765-4 (CAN 29/500)");
+                for (e, id) in sim.ecus.iter_mut().zip([0x11, 0x1D]) {
+                    e.id = id;
+                }
+            }
             "not-in-car" => {
                 sim.ignition_off = true;
                 sim.port_voltage = Some("0.1V");
             }
-            other => bail!("unknown simulator fault '{other}' (known: engine-off, ignition-off, not-in-car)"),
+            other => bail!("unknown simulator fault '{other}' (known: engine-off, ignition-off, not-in-car, can29 for odyssey-2016)"),
         }
         Ok(sim)
     }
@@ -163,7 +206,15 @@ impl Sim {
 
     /// A module at reply ID `id` holding `dtcs`; `kwp` makes it answer KWP2000 instead of UDS.
     pub fn add_module(&mut self, id: u16, kwp: bool, dtcs: &[([u8; 3], u8)]) {
-        self.ecus.push(Ecu { id, module: true, kwp, module_dtcs: dtcs.to_vec(), ..Default::default() });
+        self.add_module_with(id, ModuleSim { kwp, dtcs: dtcs.to_vec(), ..Default::default() });
+    }
+
+    /// Install (or replace) the module behaviour of the ECU answering on `id`.
+    pub fn add_module_with(&mut self, id: u16, m: ModuleSim) {
+        match self.ecus.iter_mut().find(|e| e.id == id) {
+            Some(e) => e.module = Some(m),
+            None => self.ecus.push(Ecu { id, module: Some(m), ..Default::default() }),
+        }
     }
 
     /// Process the next `cmd` normally but add `line` to its reply (e.g. a `CAN ERROR` after the real answer).
@@ -183,6 +234,13 @@ impl Sim {
     pub fn set_vin(&mut self, ecu: u16, vin: &'static str) {
         if let Some(e) = self.ecus.iter_mut().find(|e| e.id == ecu) {
             e.vin = Some(vin);
+        }
+    }
+
+    /// Replace one ECU's stored (confirmed) emissions codes.
+    pub fn set_stored(&mut self, ecu: u16, codes: &[u16]) {
+        if let Some(e) = self.ecus.iter_mut().find(|e| e.id == ecu) {
+            e.stored = codes.to_vec();
         }
     }
 
@@ -207,17 +265,18 @@ impl Sim {
                 f.push(f.iter().map(|&b| b as u32).sum::<u32>() as u8);
                 vec![hex(&f)]
             }
-            _ if payload.len() <= 7 => {
-                let mut f = vec![payload.len() as u8];
-                f.extend_from_slice(payload);
-                vec![format!("{ecu:03X} {}", hex(&f))]
-            }
-            _ => {
-                let mut out = vec![format!("{ecu:03X} 1{:X} {:02X} {}", payload.len() >> 8, payload.len() & 0xFF, hex(&payload[..6]))];
+            bus => {
+                let id = if bus == Bus::Can29 { format!("18 DA F1 {:02X}", ecu & 0xFF) } else { format!("{ecu:03X}") };
+                if payload.len() <= 7 {
+                    let mut f = vec![payload.len() as u8];
+                    f.extend_from_slice(payload);
+                    return vec![format!("{id} {}", hex(&f))];
+                }
+                let mut out = vec![format!("{id} 1{:X} {:02X} {}", payload.len() >> 8, payload.len() & 0xFF, hex(&payload[..6]))];
                 for (i, chunk) in payload[6..].chunks(7).enumerate() {
                     let mut c = chunk.to_vec();
                     c.resize(7, 0);
-                    out.push(format!("{ecu:03X} 2{:X} {}", (i + 1) % 16, hex(&c)));
+                    out.push(format!("{id} 2{:X} {}", (i + 1) % 16, hex(&c)));
                 }
                 out
             }
@@ -283,24 +342,31 @@ impl Sim {
             [0x0A] if !ecu.pids.is_empty() => Some(dtcs(0x4A, &ecu.permanent)),
             [0x04] if !ecu.pids.is_empty() && !self.ignore_clear => Some(vec![0x44]),
             [0x09, 0x02] => ecu.vin.map(|v| [vec![0x49, 0x02, 0x01], v.as_bytes().to_vec()].concat()),
-            [0x19, 0x02, mask] if ecu.module && !ecu.kwp => {
-                let mut v = vec![0x59, 0x02, 0xFF];
-                for (dtc, status) in ecu.module_dtcs.iter().filter(|(_, st)| st & mask != 0) {
-                    v.extend_from_slice(dtc);
-                    v.push(*status);
-                }
-                Some(v)
+            [0x19, ..] | [0x18, ..] | [0x14, ..] if ecu.module.is_some() => {
+                let m = ecu.module.as_ref().expect("checked");
+                let list = |svc: Vec<u8>, keep: &dyn Fn(u8) -> bool, three: bool| {
+                    let mut v = svc;
+                    for (dtc, status) in m.dtcs.iter().filter(|(_, st)| keep(*st)) {
+                        v.extend_from_slice(if three { &dtc[..] } else { &dtc[..2] });
+                        v.push(*status);
+                    }
+                    v
+                };
+                Some(match (req, m.kwp) {
+                    ([0x19, ..], true) => vec![0x7F, 0x19, m.kwp_nrc],
+                    ([0x19, ..], false) if m.session_only => vec![0x7F, 0x19, 0x7F],
+                    ([0x19, 0x02, mask], false) if m.strict && mask & !m.avail != 0 => vec![0x7F, 0x19, 0x31],
+                    ([0x19, 0x02, mask], false) => list(vec![0x59, 0x02, m.avail], &|st| st & mask != 0, true),
+                    ([0x18, 0x00, 0xFF, 0x00], true) => list(vec![0x58, m.dtcs.len() as u8], &|_| true, false),
+                    ([0x18, ..], true) => vec![0x7F, 0x18, 0x12],
+                    ([0x18, ..], false) => vec![0x7F, 0x18, 0x11],
+                    ([0x14, 0xFF, 0xFF, 0xFF], false) => vec![0x54],
+                    ([0x14, 0xFF, 0x00], true) => vec![0x54, 0xFF, 0x00],
+                    ([0x14, ..], false) => vec![0x7F, 0x14, 0x13],
+                    ([0x14, ..], true) => vec![0x7F, 0x14, 0x79],
+                    _ => vec![0x7F, req[0], 0x12],
+                })
             }
-            [0x19, ..] if ecu.module && ecu.kwp => Some(vec![0x7F, 0x19, 0x11]),
-            [0x18, 0x02, 0xFF, 0x00] if ecu.module && ecu.kwp => {
-                let mut v = vec![0x58, ecu.module_dtcs.len() as u8];
-                for (dtc, status) in &ecu.module_dtcs {
-                    v.extend_from_slice(&dtc[..2]);
-                    v.push(*status);
-                }
-                Some(v)
-            }
-            [0x14, ..] if ecu.module => Some(vec![0x54]),
             _ => ecu.extra.get(cmd).cloned(),
         }
     }
@@ -353,11 +419,12 @@ impl Transport for Sim {
                     self.ignition_off = true;
                     return Ok("7EB 01 44\r7EC 01 44\r\r>".into());
                 }
-                if req.first() == Some(&0x14) {
-                    let target = self.header + 8;
-                    if let Some(e) = self.ecus.iter_mut().find(|e| e.id == target && e.module) {
-                        e.module_dtcs.clear();
-                    }
+                // A module clears only on the request form of its own protocol.
+                let target = self.header + 8;
+                if let Some(m) = self.ecus.iter_mut().find(|e| e.id == target).and_then(|e| e.module.as_mut())
+                    && ((!m.kwp && req == [0x14, 0xFF, 0xFF, 0xFF]) || (m.kwp && req == [0x14, 0xFF, 0x00]))
+                {
+                    m.dtcs.clear();
                 }
                 if req == [0x04] && !self.ignore_clear {
                     for e in &mut self.ecus {

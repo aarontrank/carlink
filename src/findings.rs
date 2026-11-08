@@ -27,10 +27,11 @@ fn finding(severity: Severity, title: impl Into<String>, detail: impl Into<Strin
     Finding { severity, code: None, title: title.into(), detail: detail.into(), recommendation: recommendation.into() }
 }
 
-/// The engine ECU's value (7E8 on CAN, 10 on K-line) when it reports one, else the first module's.
+/// The engine ECU's value (see `scan::engine_ecu`) when it reports one, else the first module's.
 fn live(s: &Scan, key: &str) -> Option<f64> {
+    let engine = crate::scan::engine_ecu(s.ecus.iter().map(String::as_str));
     let mine = s.live.iter().filter(|r| r.reading.key == key);
-    mine.clone().find(|r| matches!(r.ecu.as_str(), "7E8" | "10")).or_else(|| mine.clone().next()).map(|r| r.reading.value)
+    mine.clone().find(|r| Some(r.ecu.as_str()) == engine).or_else(|| mine.clone().next()).map(|r| r.reading.value)
 }
 
 /// Codes whose fault can destroy the engine or the high-voltage system if the car keeps being driven.
@@ -441,6 +442,7 @@ mod tests {
     #[test]
     fn engine_ecu_value_drives_findings_over_another_module() {
         let mut s = base();
+        s.ecus = vec!["7E8".into(), "7E9".into()];
         s.live.push(EcuReading { ecu: "7E9".into(), reading: decode_pid(0x05, &[40 + 115]).unwrap() });
         s.live.push(EcuReading { ecu: "7E8".into(), reading: decode_pid(0x05, &[40 + 90]).unwrap() });
         assert!(titles(&s).is_empty(), "{:?}", titles(&s));
