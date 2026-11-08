@@ -19,7 +19,7 @@ are in the repo's `DECISIONS.md`.
 | Command | What it does | Wiki basis |
 |---|---|---|
 | `ports`, `probe` | Finds the adapter (product string "OBDLink" first, then FTDI `0403:6015`), checks identity (`ATI`) before anything else, power at the OBD port, the car, the VIN | [[macos-serial-setup]], [[elm327-at-commands]], [[stn-st-commands]] |
-| `scan` | Supported PIDs, monitors, services 03/07/0A (complete only if every CAN ECU answered 03 and none counts more confirmed codes than were read), freeze frame, VIN, live snapshot incl. O2/wideband/catalyst PIDs, service 06 (CAN), vehicle-specific reads, module codes, findings, inspection outlook; saved per VIN | [[obd2-services]], [[obd2-pids]], [[obd2-pids-extended]], [[readiness-monitors]], [[dtc-format]], [[diagnostic-thresholds]], [[obd2-mode06]] |
+| `scan` | Supported PIDs, monitors, services 03/07/0A (complete only if every CAN ECU answered 03 — a non-CAN ECU may stay silent only when its PID 01 counts zero confirmed codes — and none counts more confirmed codes than were read), freeze frame, VIN, live snapshot incl. O2/wideband/catalyst PIDs, service 06 (CAN), vehicle-specific reads, module codes, findings, inspection outlook; saved per VIN | [[obd2-services]], [[obd2-pids]], [[obd2-pids-extended]], [[readiness-monitors]], [[dtc-format]], [[diagnostic-thresholds]], [[obd2-mode06]] |
 | `tests` | Service 06: CAN standardized MIDs with UASID scaling, per-cylinder misfire counts (A1–AD, TID 0B/0C); K-line raw tests with Honda's CR-V labels | [[obd2-mode06]], [[honda-mode06]] |
 | `watch` | Samples PIDs (or the Kona BMS 220101) repeatedly; min/max/avg | [[live-data-interpretation]] |
 | `clear` | Engine/emissions (service 04, functional) by default; modules (UDS `14 FF FF FF` / KWP `14 FF 00`, physical) only when named. Needs `--confirm-clear-codes` and a VIN; refuses on identity conflict, running engine, incomplete code read; Kona: never 04, never BMS/SRS/SMK. Outcome only from a fresh scan | [[clearing-codes]], [[uds-module-dtcs]], [[kona-ev-modules]] |
@@ -37,6 +37,8 @@ are in the repo's `DECISIONS.md`.
   wrong shape (adapter rebooted, headers off) triggers re-initialisation and one retry.
 - Timing: the deadline restarts on every received byte (response pending, K-line init); after a
   timeout the adapter is interrupted with a space and drained; a bare CR is never sent.
+- A lost link (USB disconnect, or two timeouts in a row, e.g. a request and its retry) stops all traffic: the
+  command fails with `adapter_disconnected` / `adapter_timeout` instead of returning a partial scan.
 - Physical addressing (`with_header`): `ATSH<id> ATCRA<id+8> ATFCSH<id> ATFCSD300000 ATFCSM1`, then
   restore `ATFCSM0 ATAR ATSH7DF`; a failed restore blocks every later request until repaired.
 - Engine ECU (bare history keys, findings): `7E8`, `18DAF110`, `18DAF111`, or K-line `10`.

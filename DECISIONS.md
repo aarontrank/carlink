@@ -125,6 +125,32 @@ problems and reset errors. The skill must work even for less capable agents.
   high-confidence-only review. Residual items are recorded as open decisions O8 and O9 rather than
   patched further.
 
+### Phase 4 — final pass on what agents read
+- **D39. A K-line ECU's silence to service 03 counts as "no codes" only when its own monitor status
+  (PID 01) counts zero confirmed codes** (extends D21). An ISO 9141 ECU may answer `43 00 00 …` or stay silent, and
+  requiring an answer outright would mark every CR-V scan incomplete — and block its clears — if the real
+  car stays silent. On CAN, silence is still always a lost reply. Basis: J1979 makes a no-code reply
+  optional on ISO 9141-2/J1850 and required on CAN and KWP (wiki `dtc-format`), and the real Kona captures
+  show every CAN ECU answering `43 00`. Failure direction: a K-line ECU that answers `0100` but reports no
+  PID 01 count and stays silent makes every scan incomplete (no clear) — loud, never a silent "no codes".
+  The rule covers every non-CAN protocol, KWP included: KWP must reply, but when the ECU's own count is
+  zero, a lost reply hides no confirmed code either.
+- **D40. Every `carlink --help` argument must have a description, enforced by a test.** Rule 1 of the skill
+  sends agents to the help text when the skill does not cover something.
+- **D41. A lost adapter link ends the command with its error; nothing partial is reported or saved.** Once
+  the adapter is disconnected, or two exchanges in a row time out (each timeout is already followed by an
+  interrupt and drain, so the second one — a retry or the next command — means the adapter is not
+  answering), nothing more is sent,
+  and `scan`, `tests` and `clear`'s scans return `adapter_disconnected` / `adapter_timeout` (with its
+  `what_to_do`). Before, every remaining request waited out its own timeout — about 17 s each, over ten
+  minutes for a scan, far past an agent's tool timeout — and the half-empty result was saved. A clear
+  that was already sent still ends `unverified` (D11), never retried.
+- **D42. Review rounds on the lost-link latch stop at round 8 (stopping rule).** Round 7's KWP finding came
+  from my round-6 wiki change and round 8's K39 from my round-7 `with_header` fix: two consecutive rounds
+  with fix-induced findings. The residual items (review K37–K42) are recorded, not patched. None of them
+  makes carlink send a second clear or present a lost link as a clean result; at worst an error message
+  names the wrong step, or the lost link is reported one request later in the same command.
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and

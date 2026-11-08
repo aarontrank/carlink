@@ -1,7 +1,7 @@
 //! An initialised ELM327/STN session over some byte transport.
 
 use crate::elm::{AdapterError, Bus, Message, parse_response};
-use crate::problem::{CHECK_IGNITION, problem};
+use crate::problem::{CHECK_IGNITION, Problem, problem};
 use anyhow::{Result, bail};
 use serde::Serialize;
 
@@ -37,6 +37,8 @@ pub struct Adapter<T: Transport> {
     physical: Option<String>,
     /// Set while the adapter may not be in functional addressing; cleared only by a verified restore.
     dirty: bool,
+    lost: Option<Problem>,
+    timeouts: u8,
 }
 
 const SETUP: &[&str] = &["ATE0", "ATL0", "ATS1", "ATH1", "ATCAF1", "ATAT1", "ATSP0"];
@@ -49,8 +51,8 @@ fn clean(s: &str) -> String {
     s.replace('>', "").split(['\r', '\n']).map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" ")
 }
 
-fn expect_ok<T: Transport>(t: &mut T, cmd: &str) -> Result<()> {
-    let r = clean(&t.exchange(cmd)?);
+fn expect_ok(cmd: &str, reply: &str) -> Result<()> {
+    let r = clean(reply);
     if !r.ends_with("OK") {
         bail!("adapter rejected {cmd} (answered {r:?})");
     }
@@ -89,22 +91,22 @@ impl<T: Transport> Adapter<T> {
             ));
         }
         for cmd in SETUP {
-            expect_ok(&mut t, cmd)?;
+            expect_ok(cmd, &t.exchange(cmd)?)?;
         }
         let device = clean(&t.exchange("ATI")?);
         let stn = Some(clean(&t.exchange("STI")?)).filter(|s| s != "?");
         let stn_device = Some(clean(&t.exchange("STDI")?)).filter(|s| s != "?");
         let info = AdapterInfo { simulated: t.simulated(), device, stn, stn_device, protocol: String::new(), protocol_number: String::new() };
-        Ok(Adapter { t, bus: Bus::Legacy, info, physical: None, dirty: false })
+        Ok(Adapter { t, bus: Bus::Legacy, info, physical: None, dirty: false, lost: None, timeouts: 0 })
     }
 
     /// Find the car's OBD protocol (the first request triggers the adapter's protocol search).
     pub fn detect_vehicle(&mut self) -> Result<()> {
-        let probe = clean(&self.t.exchange("0100")?);
+        let probe = clean(&self.send("0100")?);
         if !probe.contains("41 00") {
             return Err(problem("vehicle_not_responding", format!("the adapter is working but the car did not answer ({probe})"), CHECK_IGNITION));
         }
-        let number = clean(&self.t.exchange("ATDPN")?);
+        let number = clean(&self.send("ATDPN")?);
         let digit = number.strip_prefix('A').unwrap_or(&number);
         if digit.len() != 1 || !"123456789ABC".contains(digit) {
             return Err(problem(
@@ -114,7 +116,7 @@ impl<T: Transport> Adapter<T> {
             ));
         }
         self.info.protocol_number = number.clone();
-        self.info.protocol = clean(&self.t.exchange("ATDP")?).trim_start_matches("AUTO, ").to_string();
+        self.info.protocol = clean(&self.send("ATDP")?).trim_start_matches("AUTO, ").to_string();
         self.bus = Bus::from_protocol(digit.chars().next().unwrap_or('0'));
         Ok(())
     }
@@ -133,6 +135,27 @@ impl<T: Transport> Adapter<T> {
         &self.info
     }
 
+    /// Err once the link is lost. Call it before returning anything built from many requests, or a lost
+    /// link yields a partial result.
+    pub fn ensure_connected(&self) -> Result<()> {
+        match &self.lost {
+            Some(p) => Err(p.clone().into()),
+            None => Ok(()),
+        }
+    }
+
+    /// Every exchange after `open` must go through here: a direct `self.t.exchange` bypasses the lost-link latch.
+    fn send(&mut self, cmd: &str) -> Result<String> {
+        self.ensure_connected()?;
+        let r = self.t.exchange(cmd);
+        let kind = r.as_ref().err().and_then(crate::problem::find).map(|p| p.kind);
+        self.timeouts = if kind == Some("adapter_timeout") { self.timeouts + 1 } else { 0 };
+        if kind == Some("adapter_disconnected") || self.timeouts >= 2 {
+            self.lost = r.as_ref().err().and_then(crate::problem::find).cloned();
+        }
+        r
+    }
+
     pub fn transport(&self) -> &T {
         &self.t
     }
@@ -144,6 +167,7 @@ impl<T: Transport> Adapter<T> {
     /// Send one OBD/UDS request and parse the replies. Reads are retried once after a transient
     /// adapter error or an adapter reboot; anything else (a clear) is sent exactly once.
     pub fn query(&mut self, cmd: &str) -> Result<Vec<Message>> {
+        self.ensure_connected()?;
         if self.dirty && self.physical.is_none() {
             self.reset_addressing().map_err(|e| {
                 problem(
@@ -153,7 +177,7 @@ impl<T: Transport> Adapter<T> {
                 )
             })?;
         }
-        let first = self.t.exchange(cmd).and_then(|r| parse_response(&r, self.bus));
+        let first = self.send(cmd).and_then(|r| parse_response(&r, self.bus));
         let Err(e) = first else { return first };
         let line = adapter_line(&e).map(str::to_string);
         let rebooted = line.as_deref().is_some_and(|l| l == "LV RESET" || l.starts_with("UNEXPECTED REPLY FORMAT") || l.contains("ELM327"));
@@ -162,22 +186,22 @@ impl<T: Transport> Adapter<T> {
         }
         let transient = rebooted
             || matches!(line.as_deref(), Some("STOPPED" | "BUS BUSY" | "BUFFER FULL" | "CAN ERROR" | "FC RX TIMEOUT" | "BUS ERROR"))
-            || e.to_string().contains("timed out")
+            || crate::problem::find(&e).is_some_and(|p| p.kind == "adapter_timeout")
             || e.to_string().contains("incomplete multi-frame");
         if !transient || !is_read(cmd) {
             return Err(e);
         }
-        self.t.exchange(cmd).and_then(|r| parse_response(&r, self.bus))
+        self.send(cmd).and_then(|r| parse_response(&r, self.bus))
     }
 
     /// The adapter rebooted (low-voltage reset): it is back to echo on / headers off / functional addressing.
     fn reinit(&mut self) -> Result<()> {
         for cmd in SETUP {
-            expect_ok(&mut self.t, cmd)?;
+            expect_ok(cmd, &self.send(cmd)?)?;
         }
         // ATSP0 left the protocol to be searched again: let a functional request do that, never a
         // physical one (and never `ATSP <n>`, which would be saved in the adapter's memory).
-        self.t.exchange("0100")?;
+        self.send("0100")?;
         self.dirty = self.physical.is_some();
         if let Some(h) = self.physical.clone() {
             self.address(&h)?;
@@ -187,10 +211,10 @@ impl<T: Transport> Adapter<T> {
 
     /// Battery voltage at the OBD port, as measured by the adapter. A reboot noticed here re-initialises.
     pub fn voltage(&mut self) -> Result<Option<f64>> {
-        let mut reply = clean(&self.t.exchange("ATRV")?);
+        let mut reply = clean(&self.send("ATRV")?);
         if reply.contains("LV RESET") || reply.contains("ELM327") {
             self.reinit()?;
-            reply = clean(&self.t.exchange("ATRV")?);
+            reply = clean(&self.send("ATRV")?);
         }
         Ok(reply.trim_end_matches('V').parse().ok())
     }
@@ -200,7 +224,7 @@ impl<T: Transport> Adapter<T> {
     fn address(&mut self, header: &str) -> Result<()> {
         let id = u16::from_str_radix(header, 16).ok().filter(|id| *id <= 0x7F7).ok_or_else(|| anyhow::anyhow!("bad 11-bit CAN header '{header}'"))?;
         for cmd in [format!("ATSH{header}"), format!("ATCRA{:03X}", id + 8), format!("ATFCSH{header}"), "ATFCSD300000".into(), "ATFCSM1".into()] {
-            expect_ok(&mut self.t, &cmd)?;
+            expect_ok(&cmd, &self.send(&cmd)?)?;
         }
         Ok(())
     }
@@ -212,7 +236,7 @@ impl<T: Transport> Adapter<T> {
         if self.bus != Bus::Can11 {
             return Ok(());
         }
-        let results = ["ATFCSM0", "ATAR", "ATSH7DF"].map(|c| expect_ok(&mut self.t, c));
+        let results = ["ATFCSM0", "ATAR", "ATSH7DF"].map(|c| self.send(c).and_then(|r| expect_ok(c, &r)));
         for r in results {
             r?;
         }
@@ -233,6 +257,7 @@ impl<T: Transport> Adapter<T> {
         self.physical = None;
         let restore = self.reset_addressing();
         match (r, restore) {
+            (Err(e), Err(_)) if self.lost.is_some() => Err(e),
             (Err(e), Err(re)) => Err(e.context(format!("and the adapter could not be returned to normal addressing: {re}"))),
             (r, _) => r,
         }
@@ -257,6 +282,62 @@ impl Transport for Box<dyn Transport> {
 mod tests {
     use super::*;
     use crate::sim::Sim;
+
+    fn kind(e: &anyhow::Error) -> Option<&'static str> {
+        crate::problem::find(e).map(|p| p.kind)
+    }
+
+    #[test]
+    fn a_disconnected_adapter_fails_every_later_request_without_sending_it() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.fail("010C", "adapter_disconnected", usize::MAX);
+        let mut a = Adapter::connect(sim).unwrap();
+        assert!(a.query("010C").is_err());
+        let sent = a.transport().log.len();
+        assert_eq!(kind(&a.query("010D").unwrap_err()), Some("adapter_disconnected"));
+        assert!(a.voltage().is_err());
+        assert!(a.with_header("7E4", |a| a.query("220101")).is_err());
+        assert_eq!(a.transport().log.len(), sent, "nothing more reaches a lost adapter");
+        assert_eq!(a.ensure_connected().err().as_ref().and_then(kind), Some("adapter_disconnected"));
+    }
+
+    #[test]
+    fn after_a_link_lost_inside_with_header_later_requests_report_the_lost_link() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.fail("220101", "adapter_disconnected", usize::MAX);
+        let mut a = Adapter::connect(sim).unwrap();
+        let _ = a.with_header("7E4", |a| a.query("220101"));
+        assert_eq!(kind(&a.query("0100").unwrap_err()), Some("adapter_disconnected"));
+    }
+
+    #[test]
+    fn a_link_lost_inside_with_header_is_not_also_called_an_addressing_fault() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.fail("220101", "adapter_disconnected", usize::MAX);
+        let mut a = Adapter::connect(sim).unwrap();
+        let e = a.with_header("7E4", |a| a.query("220101")).unwrap_err();
+        assert!(!format!("{e:#}").contains("normal addressing"), "{e:#}");
+    }
+
+    #[test]
+    fn timeouts_the_retry_recovers_from_keep_the_adapter() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.fail("010C", "adapter_timeout", 1);
+        let mut a = Adapter::connect(sim).unwrap();
+        assert!(a.query("010C").is_ok());
+        a.transport_mut().fail("010D", "adapter_timeout", 1);
+        assert!(a.query("010D").is_ok(), "two timeouts, but not in a row");
+        assert!(a.ensure_connected().is_ok());
+    }
+
+    #[test]
+    fn a_timeout_on_the_retry_too_means_the_adapter_is_lost() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.fail("010C", "adapter_timeout", 2);
+        let mut a = Adapter::connect(sim).unwrap();
+        assert!(a.query("010C").is_err());
+        assert_eq!(kind(&a.query("010D").unwrap_err()), Some("adapter_timeout"), "the simulator would answer 010D now");
+    }
 
     /// Records what reaches the transport, independent of the simulator's own log.
     struct LogTap<'a> {

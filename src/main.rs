@@ -14,7 +14,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
-    /// Serial device, or `sim:<vehicle>[:engine-off|:ignition-off]` for the built-in simulator. Default: auto-detect the OBDLink EX.
+    /// Serial device, or `sim:<vehicle>` for the built-in simulator (add `:engine-off`, `:ignition-off`, `:not-in-car`, or `:can29` for the Odyssey). Default: auto-detect the OBDLink EX.
     #[arg(long, global = true, env = "CARLINK_PORT")]
     port: Option<String>,
     /// History database. Default: ~/.local/share/carlink/carlink.db
@@ -44,6 +44,7 @@ enum Cmd {
         /// Odometer reading in miles, recorded with the session.
         #[arg(long)]
         odometer_mi: Option<f64>,
+        /// The complaint in a few words (e.g. "CEL on, rough idle"), saved with the session.
         #[arg(long)]
         note: Option<String>,
         /// Do not record this scan in history.
@@ -52,11 +53,13 @@ enum Cmd {
     },
     /// Clear trouble codes (engine/emissions via OBD service 04, and modules via UDS), then re-scan to verify. Saves a scan first.
     Clear {
+        /// Vehicle profile (see `vehicles`), e.g. kona-ev-2020. Refused if the VIN says it is a different car.
         #[arg(long)]
         vehicle: Option<String>,
         /// Required unless the car reports its own VIN.
         #[arg(long)]
         vin: Option<String>,
+        /// Accept a --vin whose check digit does not match (only for cars built outside North America).
         #[arg(long)]
         vin_no_check: bool,
         /// Required. Clearing also resets readiness monitors and erases freeze-frame data.
@@ -66,11 +69,13 @@ enum Cmd {
         /// (engine + every module with codes). Default: engine/emissions codes only.
         #[arg(long, value_delimiter = ',')]
         only: Vec<String>,
+        /// What was repaired, or why the person asked for the clear; saved with the sessions.
         #[arg(long)]
         note: Option<String>,
     },
     /// Sample live readings repeatedly (e.g. idle, then 2,500 rpm, or a test drive) and summarise min/max/average. Not saved.
     Watch {
+        /// Vehicle profile (see `vehicles`); picks the default readings (the Kona's battery data needs it).
         #[arg(long)]
         vehicle: Option<String>,
         /// Comma-separated reading keys, e.g. rpm,stft_b1,ltft_b1. Default: a sensible set for the car.
@@ -86,12 +91,15 @@ enum Cmd {
     /// The car's own self-test results (OBD service 06): per-cylinder misfire counts on CAN cars, and each
     /// monitor's test values with pass/FAIL against its limits. Read it BEFORE clearing (a clear zeroes it).
     Tests {
+        /// Vehicle profile (see `vehicles`); names the CR-V's Honda-specific tests.
         #[arg(long)]
         vehicle: Option<String>,
     },
     /// Describe a trouble code (generic SAE meaning plus vehicle notes).
     Dtc {
+        /// The code, e.g. P0303 (the second character is a digit 0–3, never the letter O).
         code: String,
+        /// Vehicle profile (see `vehicles`); adds what the code usually means on that car.
         #[arg(long)]
         vehicle: Option<String>,
     },
@@ -99,11 +107,13 @@ enum Cmd {
     Vehicles,
     /// Reset/relearn procedures for a vehicle and whether carlink can perform them.
     Resets {
+        /// Vehicle profile (see `vehicles`), e.g. odyssey-2016.
         #[arg(long)]
         vehicle: String,
     },
     /// Send one read-only request (services 01 02 03 06 07 09 0A 18 19 21 22) and show the replies.
     Raw {
+        /// 1–7 bytes of hex, e.g. 010C or 220101.
         request: String,
         /// CAN request header for physical addressing, e.g. 7E4.
         #[arg(long)]
@@ -125,19 +135,39 @@ enum HistoryCmd {
         /// Vehicle key from `history vehicles`.
         #[arg(long)]
         vehicle: Option<String>,
+        /// Most sessions to list.
         #[arg(long, default_value_t = 20)]
         limit: i64,
     },
     /// One session's full saved report.
-    Show { id: i64 },
+    Show {
+        /// Session id from `history sessions` (or a scan's `session_id`).
+        id: i64,
+    },
     /// A reading's values over time, oldest first.
-    Trend { vehicle: String, key: String },
+    Trend {
+        /// Vehicle key (the VIN) from `history vehicles`.
+        vehicle: String,
+        /// Reading key from `history keys`, e.g. ltft_b1 or soh.
+        key: String,
+    },
     /// Reading keys recorded for a vehicle.
-    Keys { vehicle: String },
+    Keys {
+        /// Vehicle key (the VIN) from `history vehicles`.
+        vehicle: String,
+    },
     /// Every trouble code ever seen on a vehicle, with first/last seen and whether it is set now.
-    Dtcs { vehicle: String },
+    Dtcs {
+        /// Vehicle key (the VIN) from `history vehicles`.
+        vehicle: String,
+    },
     /// What changed between two sessions (e.g. last visit → today): codes new/gone/still set, readings.
-    Compare { from: i64, to: i64 },
+    Compare {
+        /// The earlier session id.
+        from: i64,
+        /// The later session id.
+        to: i64,
+    },
 }
 
 fn transport(port: Option<&str>) -> Result<Box<dyn Transport>> {
@@ -256,7 +286,7 @@ fn run(cli: Cli) -> Result<Value> {
             let flagged = profile(vehicle.as_deref())?;
             let mut a = connect(port)?;
             let p = flagged.or_else(|| carlink::scan::vin(&mut a).ok().flatten().as_deref().and_then(vehicles::detect));
-            let t = carlink::mode06::read(&mut a, p.map(|p| p.id));
+            let t = carlink::mode06::read(&mut a, p.map(|p| p.id))?;
             let mut v = json!(t);
             v["findings"] = json!(carlink::findings::tests(&t));
             v["simulated"] = json!(a.info().simulated);
@@ -321,5 +351,33 @@ fn main() {
             Some(p) => fail(format!("{e:#}"), p.kind, p.what_to_do, 1),
             None => fail(format!("{e:#}"), "error", "Read the error message. If it mentions the adapter or the car, check the connections and the ignition, then run the command once more; if it repeats, report the message to the person you are working for.", 1),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Cli;
+    use clap::CommandFactory;
+
+    fn undocumented(cmd: &clap::Command, path: &str, out: &mut Vec<String>) {
+        for a in cmd.get_arguments() {
+            if a.get_help().is_none() {
+                out.push(format!("{path} {}", a.get_id()));
+            }
+        }
+        for s in cmd.get_subcommands() {
+            let sub = format!("{path} {}", s.get_name());
+            if s.get_about().is_none() {
+                out.push(sub.clone());
+            }
+            undocumented(s, &sub, out);
+        }
+    }
+
+    #[test]
+    fn every_command_and_argument_has_help_text() {
+        let mut missing = Vec::new();
+        undocumented(&Cli::command(), "carlink", &mut missing);
+        assert!(missing.is_empty(), "without help text: {missing:?}");
     }
 }

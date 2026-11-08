@@ -2,7 +2,7 @@
 title: DTC encoding (services 03, 07, 0A and 02 PID 02)
 type: concept
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 sources:
   - raw/wikipedia-obd2-pids-2026-11-07.wikitext
   - url:https://en.wikipedia.org/wiki/OBD-II_PIDs
@@ -10,6 +10,8 @@ sources:
   - url:https://ramn.readthedocs.io/en/latest/userguide/diag_tutorial.html
   - url:https://github.com/ircama/ELM327-emulator
   - url:https://github.com/foerbsnavi/obdex
+  - url:https://x-engineer.org/obd-diagnostic-service-mode-03-request-emission-related-diagnostic-trouble-codes-dtcs/
+  - url:https://www.scribd.com/document/334162539/ISO9141X
 tags: [obd2, dtc, decoding]
 confidence: community
 ---
@@ -64,6 +66,25 @@ Rules for the parser:
 Some secondary references (and at least one ELM emulator) mix the two layouts. The rule above
 follows Wikipedia, the ELM323 datasheet (non-CAN) and the RAMN UDS/OBD tutorial (CAN).
 (`community`)
+
+## When an ECU has no codes
+
+SAE J1979 makes the "no codes" reply protocol-dependent, so silence means different things:
+
+| Protocol | ECU with no codes | Silence means |
+|---|---|---|
+| ISO 15765-4 (CAN) | answers `43 00` (shall respond with zero DTCs) | a lost reply |
+| ISO 14230-4 (KWP) | answers `43 00 00 00 00 00 00` (all three slots $00) | a lost reply |
+| ISO 9141-2, SAE J1850 | a reply is **allowed but not required**; the ELM shows `NO DATA` | nothing, unless PID 01 counts codes |
+
+J1979's read procedure: read `01 01` first (byte A & 0x7F = confirmed codes per ECU), then `03`,
+and repeat until the codes read equal the count. carlink applies it as: a CAN ECU silent to `03` is a
+lost reply; a non-CAN ECU's silence is "no codes" only if its own PID 01 counts zero — on KWP too, since a
+lost reply from an ECU that counts zero hides no confirmed code ([[carlink-cli]]).
+Real Kona captures fit the CAN row: `03`/`07` were answered `43 00`/`47 00` by every responding ECU
+([[kona-ev-modules]]). The CR-V's behaviour (ISO 9141-2) is unconfirmed. Sources: J1979 text as
+reproduced in an ISO 9141-2 message-format excerpt (scribd.com/document/334162539) and x-engineer.org's
+Service $03 page ("If no DTCs are stored, the ECU may choose not to respond"). (`community`)
 
 ## Which list a code is in
 

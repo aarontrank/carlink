@@ -42,6 +42,7 @@ pub struct Sim {
     injected: Vec<Injection>,
     /// (command, extra line) appended to the simulated reply, each used once: the command still takes effect.
     appended: Vec<(String, String)>,
+    failure: Option<(String, &'static str, usize)>,
     pub log: Vec<String>,
 }
 
@@ -163,11 +164,9 @@ impl Sim {
             ]),
             other => bail!("unknown sim vehicle '{other}' (known: {})", VEHICLES.join(", ")),
         };
-        Ok(Sim { bus, protocol, ecus, header: 0x7DF, rx_filter: None, ignition_off: false, ignore_clear: false, ignition_off_after_clear: false, forget_vin_after_clear: false, port_voltage: None, identity: "ELM327 v1.4b", injected: Vec::new(), appended: Vec::new(), log: Vec::new() })
+        Ok(Sim { bus, protocol, ecus, header: 0x7DF, rx_filter: None, ignition_off: false, ignore_clear: false, ignition_off_after_clear: false, forget_vin_after_clear: false, port_voltage: None, identity: "ELM327 v1.4b", injected: Vec::new(), appended: Vec::new(), failure: None, log: Vec::new() })
     }
 
-    /// `<vehicle>` or `<vehicle>:<fault>`; faults let an agent rehearse error paths:
-    /// `engine-off` (ignition on, 0 rpm), `ignition-off` (the car does not answer).
     pub fn from_spec(spec: &str) -> Result<Sim> {
         let (vehicle, fault) = spec.split_once(':').unwrap_or((spec, ""));
         let mut sim = Sim::new(vehicle)?;
@@ -192,6 +191,12 @@ impl Sim {
             other => bail!("unknown simulator fault '{other}' (known: engine-off, ignition-off, not-in-car, can29 for odyssey-2016)"),
         }
         Ok(sim)
+    }
+
+    /// Fail the next `cmd` and the `count - 1` exchanges after it, whatever they are, with error `kind`
+    /// (`adapter_timeout`, `adapter_disconnected`).
+    pub fn fail(&mut self, cmd: &str, kind: &'static str, count: usize) {
+        self.failure = Some((cmd.to_string(), kind, count));
     }
 
     /// Answer the next `cmd` with `reply` (e.g. `"?"`, `"LV RESET"`, a garbled frame) instead of simulating it.
@@ -380,6 +385,14 @@ impl Transport for Sim {
     fn exchange(&mut self, cmd: &str) -> Result<String> {
         let cmd = cmd.replace(' ', "").to_uppercase();
         self.log.push(cmd.clone());
+        if let Some((from, kind, left)) = &mut self.failure
+            && *left > 0
+            && (from.is_empty() || *from == cmd)
+        {
+            from.clear();
+            *left -= 1;
+            return Err(crate::problem::problem(kind, format!("simulated {kind} on '{cmd}'"), crate::problem::CHECK_USB));
+        }
         let log = &self.log;
         let header = self.header;
         if let Some(i) = self.injected.iter().position(|j| {

@@ -3,6 +3,7 @@
 //! counts; K-line cars report raw manufacturer tests.
 
 use crate::adapter::{Adapter, Transport};
+use anyhow::Result;
 use crate::obd;
 use serde::Serialize;
 
@@ -288,7 +289,7 @@ pub fn decode_kline(ecu: &str, data: &[u8], profile: Option<&str>) -> Vec<TestRe
 }
 
 /// Walk the supported-ID bitmaps (06 00, 06 20, …) and read every supported monitor / test.
-pub fn read<T: Transport>(a: &mut Adapter<T>, profile: Option<&str>) -> Tests {
+pub fn read<T: Transport>(a: &mut Adapter<T>, profile: Option<&str>) -> Result<Tests> {
     let can = a.bus().is_can();
     let mut out = Tests::default();
     let mut ids: Vec<u8> = Vec::new();
@@ -335,12 +336,21 @@ pub fn read<T: Transport>(a: &mut Adapter<T>, profile: Option<&str>) -> Tests {
         }
     }
     out.misfire.sort_by_key(|m| m.cylinder);
-    out
+    a.ensure_connected()?;
+    Ok(out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn losing_the_adapter_during_the_self_tests_is_an_error() {
+        let mut sim = crate::sim::Sim::new("odyssey-2016").unwrap();
+        sim.fail("0600", "adapter_disconnected", usize::MAX);
+        let mut a = crate::adapter::Adapter::connect(sim).unwrap();
+        assert!(read(&mut a, None).is_err());
+    }
 
     fn hexs(s: &str) -> Vec<u8> {
         let s: String = s.split_whitespace().collect();
@@ -410,7 +420,7 @@ mod tests {
     #[test]
     fn reads_the_simulated_odyssey_misfire_counters() {
         let mut a = crate::adapter::Adapter::connect(crate::sim::Sim::new("odyssey-2016").unwrap()).unwrap();
-        let t = read(&mut a, Some("odyssey-2016"));
+        let t = read(&mut a, Some("odyssey-2016")).unwrap();
         assert!(t.supported);
         let cyl3 = t.misfire.iter().find(|m| m.cylinder == 3).unwrap();
         assert_eq!(cyl3.current, Some(180.0));
@@ -420,13 +430,13 @@ mod tests {
     #[test]
     fn an_ev_without_service_06_reports_unsupported() {
         let mut a = crate::adapter::Adapter::connect(crate::sim::Sim::new("kona-ev-2020").unwrap()).unwrap();
-        assert!(!read(&mut a, Some("kona-ev-2020")).supported);
+        assert!(!read(&mut a, Some("kona-ev-2020")).unwrap().supported);
     }
 
     #[test]
     fn reads_the_simulated_crv_k_line_tests() {
         let mut a = crate::adapter::Adapter::connect(crate::sim::Sim::new("crv-2004").unwrap()).unwrap();
-        let t = read(&mut a, Some("crv-2004"));
+        let t = read(&mut a, Some("crv-2004")).unwrap();
         assert!(t.results.iter().any(|r| r.test.contains("catalyst")), "{:?}", t.results);
         assert!(t.misfire.is_empty());
     }

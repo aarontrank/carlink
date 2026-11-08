@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Problem {
     pub kind: &'static str,
     pub message: String,

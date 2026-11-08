@@ -123,7 +123,8 @@ pub fn build<T: Transport>(a: &mut Adapter<T>, ident: &Ident) -> Result<Report> 
     };
     let modules: Vec<ModuleReport> = vehicle.map(|v| v.modules.iter().map(|m| uds::read_module(a, m)).collect()).unwrap_or_default();
     // K-line service 06 has no misfire counts, only raw maker tests: only `carlink tests` reads it there.
-    let tests = a.bus().is_can().then(|| mode06::read(a, vehicle.map(|v| v.id))).filter(|t| t.supported);
+    let tests = a.bus().is_can().then(|| mode06::read(a, vehicle.map(|v| v.id))).transpose()?.filter(|t| t.supported);
+    a.ensure_connected()?;
     let model_year = vin.as_deref().map(vehicles::vin_info).and_then(|f| f.model_year);
     let mut findings = findings::generic(&scan, model_year);
     findings.extend(module_findings(&modules));
@@ -311,6 +312,14 @@ mod tests {
     use super::*;
     use crate::adapter::Adapter;
     use crate::sim::Sim;
+
+    #[test]
+    fn a_scan_that_loses_the_adapter_is_an_error_not_a_partial_report() {
+        let mut sim = Sim::new("crv-2004").unwrap();
+        sim.fail("0902", "adapter_disconnected", usize::MAX);
+        let mut a = Adapter::connect(sim).unwrap();
+        assert!(build(&mut a, &Ident::default()).is_err());
+    }
 
     fn build_for(sim: &str, hint: Option<&str>) -> Report {
         let mut a = Adapter::connect(Sim::new(sim).unwrap()).unwrap();

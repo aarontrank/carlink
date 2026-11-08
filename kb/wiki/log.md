@@ -41,3 +41,8 @@ service manual. Created: [[uds-module-dtcs]], [[kona-ev-modules]], [[odyssey-201
 [[carlink-cli]] rewritten for the new commands and protocol handling; [[diagnostic-thresholds]]
 charging rows aligned with carlink's findings.
 
+
+## [2026-11-08] update | K-line code-read completeness
+Sources: url:x-engineer.org (Service $03), url:scribd.com/document/334162539 (J1979 excerpt). [[dtc-format]]
+gained "When an ECU has no codes": on ISO 9141-2/J1850 a no-code reply is optional, on CAN and KWP it is
+required. [[carlink-cli]]: a K-line ECU silent to 03 counts as "no codes" only when its PID 01 counts zero.

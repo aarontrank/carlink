@@ -45,7 +45,8 @@ pub struct Scan {
     pub dtcs: Vec<Dtc>,
     pub freeze_frames: Vec<FreezeFrame>,
     pub live: Vec<EcuReading>,
-    /// False when any of the stored/pending/permanent code reads failed, so `dtcs` may be missing codes.
+    /// False when `dtcs` may be missing codes: a code read failed, an ECU stayed silent to 03 (see below),
+    /// or an ECU counts more confirmed codes than were read.
     pub codes_complete: bool,
     /// Non-fatal problems hit during the sweep.
     pub errors: Vec<String>,
@@ -131,15 +132,12 @@ pub fn scan<T: Transport>(a: &mut Adapter<T>) -> Result<Scan> {
     let supported = supported(a)?;
     let mut codes_complete = true;
     let mut dtcs_all = Vec::new();
+    let mut answered_03 = None;
     for (service, kind, what) in [("03", "stored", "stored codes"), ("07", "pending", "pending codes"), ("0A", "permanent", "permanent codes")] {
         match dtcs(a, service, kind) {
             Ok((d, answered)) => {
-                // On CAN every OBD ECU answers 03 ("43 00" when it has none); silence is a lost reply.
-                if service == "03" && a.bus().is_can() {
-                    for ecu in supported.keys().filter(|e| !answered.contains(e)) {
-                        errors.push(format!("{what}: ECU {ecu} did not answer"));
-                        codes_complete = false;
-                    }
+                if service == "03" {
+                    answered_03 = Some(answered);
                 }
                 dtcs_all.extend(d);
             }
@@ -170,6 +168,18 @@ pub fn scan<T: Transport>(a: &mut Adapter<T>) -> Result<Scan> {
                 for reading in obd::decode_pid_all(pid, &m.data[2..]) {
                     live.push(EcuReading { ecu: m.ecu.clone(), reading });
                 }
+            }
+        }
+    }
+
+    // Silence to 03 is a lost reply on CAN (wiki dtc-format); off CAN it is accepted only from an ECU whose
+    // own PID 01 counts zero, so nothing counted can be missing.
+    if let Some(answered) = &answered_03 {
+        for ecu in supported.keys().filter(|e| !answered.contains(e)) {
+            let counts_none = !a.bus().is_can() && monitors.iter().any(|m| &m.ecu == ecu && m.status.dtc_count == 0);
+            if !counts_none {
+                errors.push(format!("stored codes: ECU {ecu} did not answer"));
+                codes_complete = false;
             }
         }
     }
@@ -318,6 +328,34 @@ mod tests {
         let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
         assert!(!s.codes_complete);
         assert!(s.errors.iter().any(|e| e.contains("7E8 did not answer")), "{:?}", s.errors);
+    }
+
+    #[test]
+    fn a_silent_can_ecu_is_a_lost_reply_even_when_it_counts_no_codes() {
+        let mut sim = Sim::new("odyssey-2016").unwrap();
+        sim.set_stored(0x7E8, &[0x0303]);
+        sim.inject("03", "7E8 04 43 01 03 03");
+        let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
+        assert!(!s.codes_complete, "7E9 counts no codes but did not answer: {:?}", s.errors);
+    }
+
+    #[test]
+    fn a_k_line_ecu_silent_to_03_whose_count_is_unknown_makes_the_codes_incomplete() {
+        let mut sim = Sim::new("crv-2004").unwrap();
+        sim.inject("03", "NO DATA");
+        sim.inject("0101", "NO DATA");
+        let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
+        assert!(!s.codes_complete, "{:?}", s.errors);
+        assert!(s.errors.iter().any(|e| e.contains("10 did not answer")), "{:?}", s.errors);
+    }
+
+    #[test]
+    fn a_k_line_ecu_silent_to_03_that_counts_no_codes_is_a_complete_read() {
+        let mut sim = Sim::new("crv-2004").unwrap();
+        sim.set_stored(0x10, &[]);
+        sim.inject("03", "NO DATA");
+        let s = scan(&mut Adapter::connect(sim).unwrap()).unwrap();
+        assert!(s.codes_complete, "{:?}", s.errors);
     }
 
     #[test]
