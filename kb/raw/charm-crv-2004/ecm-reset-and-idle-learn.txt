@@ -1,0 +1,47 @@
+Source: Operation CHARM service manual, 2004 Honda CR-V 4WD L4-2.4L — https://charm.li/Honda%20Truck/2004/CR-V%204WD%20L4-2.4L/Repair%20and%20Diagnosis/ (section paths in ===== headers). Retrieved 2026-11-07.
+===== Powertrain%20Management/Computers%20and%20Control%20Systems/Engine%20Control%20Module/Testing%20and%20Inspection/Programming%20and%20Relearning/ECM%20Reset/ 
+ 
+ECM Reset How to Reset the ECM/PCM 
+You can reset the ECM/PCM in either of two ways:
+ NOTE: After resetting the ECM/PCM, do the ECM/PCM idle learn procedure.
+ Reset the ECM/PCM with the Scan Tool or the HDS 
+ 1. Turn the ignition switch ON (II). Do not start the engine.
+ 2. Use the scan tool or the HDS to clear the DTC.
+ NOTE: For the specific operations, refer to the user's manual that came with the scan tool or the HDS.
+ Reset the ECM/PCM by removing the fuse 
+ 1. Turn the ignition switch OFF.
+[img /images/IMP02Q313/asian150/101520465/] 
+ 2. Remove the No.6 ECU (ECM/PCM) (15A) fuse (A) from the under-hood fuse/relay box (B) for 10 seconds .
+ How to End a Troubleshooting Session (required after any troubleshooting) 
+ 1. Reset the ECM/PCM as described above.
+ 2. Do the ECM/PCM idle learn procedure.
+ 3. Turn the ignition switch OFF.
+ 4. Disconnect the scan tool or the HDS from the DLC.
+ NOTE: The ECM/PCM is part of the immobilizer system. If you replace the ECM/PCM, it will have a different immobilizer code. To start the engine, you must rewrite the immobilizer code with the HDS.
+
+===== Powertrain%20Management/Computers%20and%20Control%20Systems/Engine%20Control%20Module/Testing%20and%20Inspection/Programming%20and%20Relearning/ECM%2FPCM%20Idle%20Learn%20Procedure/ 
+ 
+ECM/PCM Idle Learn Procedure ECM/PCM Idle Learn Procedure 
+The idle learn procedure must be done so the ECM/PCM can learn the engine idle characteristics.
+Do the idle learn procedure whenever you do any of these actions:
+ - Disconnect the battery.
+ - Replace the ECM/PCM or disconnect its connector.
+ - Reset the ECM/PCM.
+ NOTE: Erasing DTCs with the HDS does not require you to do the idle learn procedure.
+ - Replace the throttle body.
+ - Replace the idle air control (IAC) valve.
+ - Remove the No.6 ECU (ECM/PCM) (15A) fuse from the under-hood fuse/relay box.
+ - Remove the No.19 BATTERY (80A) fuse from the under-hood fuse/relay box.
+ - Remove PGM-FI main relay 1.
+ - Remove any of the wires from the under-hood fusel relay box .
+ - Disconnect any of the connectors from the under-hood fuse/relay box.
+ - Disconnect the connector between the engine compartment wire harness and ECM/PCM wire harness.
+ - Disconnect the G2 terminal from the transmission housing.
+ - Disconnect the G1 terminal from the body.
+ - Disconnect the G101 terminal from the cylinder head cover.
+ Procedure 
+ 1. Make sure all electrical items (A/C, audio, rear window defogger, lights, etc.) are off.
+ 2. Start the engine, and hold it at 3,000 rpm with no load (in Park or neutral) until the radiator fan comes on, or until the engine coolant temperature reaches 194 °F (90 °C) .
+ 3. Let the engine idle for about 5 minutes with the throttle fully closed.
+ NOTE: If the radiator fan comes on, do not include its running time in the 5 minutes.
+

@@ -1,0 +1,67 @@
+Source: Operation CHARM service manual, 2004 Honda CR-V 4WD L4-2.4L — https://charm.li/Honda%20Truck/2004/CR-V%204WD%20L4-2.4L/Repair%20and%20Diagnosis/ (section paths in ===== headers). Retrieved 2026-11-07.
+===== Maintenance/Service%20Intervals/Maintenance%20Indicator%20Reset/ 
+ 
+Maintenance Indicator Reset 
+[img /images/IMP02Q313/asian150/389671869/] 
+ 1. Turn off the engine.
+ 2. Press and hold the Select/Reset button in the instrument panel, then turn the ignition switch ON (Position II).
+ 3. Hold the button for at least 10 seconds, until the indicator resets.
+
+===== Maintenance/Service%20Intervals/Normal%20Service/110000%20MI%20or%20176000%20KM/ 
+ 
+110000 MI or 176000 KM Inspect 
+    Valve Clearance
+       Inspect every 110,000 miles, otherwise adjust only if noisy. 
+ Replace 
+    Spark Plug
+    Engine Oil
+       Perform at interval or every year, whichever comes first. 
+ Rotate 
+    Tires
+       Rotate Tires. Check tire inflation and condition at least once a month. 
+
+===== Maintenance/Service%20Intervals/Normal%20Service/120000%20MI%20or%20192000%20KM/ 
+ 
+120000 MI or 192000 KM Inspect 
+    Steering and Suspension
+       Inspect tie-rod ends, steering gear box, boots and suspension components. 
+    Parking Brake System
+    Fuel Supply Line
+       Inspect all fuel lines and connections. 
+    Fluids
+       Inspect all fluid levels and condition of fluids. 
+    Exhaust System
+    Drive Belt
+    Constant Velocity Joint Boot
+    Brakes and Traction Control
+       Inspect front and rear brakes. 
+    Brake Hose/Line
+       Inspect brake hoses and lines (including ABS/VSA if equipped). 
+ Replace 
+    Oil Filter, Engine
+    Fluid - M/T
+    Fluid - A/T
+       Replace at 120,000 miles, then every 90,000 miles or 5 years. 
+    Engine Oil
+       Perform at interval or every year, whichever comes first. 
+    Coolant
+       Replace coolant at 120,000 miles or 120 months, then every 60,000 miles or 60 months thereafter. 
+    Cabin Air Filter / Purifier
+       Replace dust and pollen filter. If you drive primarily in urban areas that have high concentrations of soot in the air from industry and from diesel-powered vehicles, replace every 15,000miles (24,000 km). 
+    Air Filter Element
+       Replace air cleaner element. If you drive in dusty conditions, replace every 15,000 miles (24,000 km). 
+ Rotate 
+    Tires
+       Rotate Tires. Check tire inflation and condition at least once a month. 
+
+===== Maintenance/Fluids/Fluid%20-%20A%2FT/Specifications/Fluid%20Type%20Specifications/ 
+ 
+Fluid Type Specifications 
+ ATF (Automatic Transmission Fluid) Use Honda ATF DW-1
+( ATF -Z1 has been replaced with ATF DW-1, Honda Service News Nov 2010)
+
+===== Maintenance/Fluids/Coolant/Specifications/Fluid%20Type%20Specifications/ 
+ 
+Fluid Type Specifications 
+Only use Honda All Season Antifreeze/Coolant Type 2 (P/N 0L999-9001) at 50 percent concentration with water. 
+

@@ -1,0 +1,85 @@
+Source: Operation CHARM service manual, 2004 Honda CR-V 4WD L4-2.4L — https://charm.li/Honda%20Truck/2004/CR-V%204WD%20L4-2.4L/Repair%20and%20Diagnosis/ (section paths in ===== headers). Retrieved 2026-11-07.
+===== Powertrain%20Management/Computers%20and%20Control%20Systems/Testing%20and%20Inspection/Monitors%2C%20Trips%2C%20Drive%20Cycles%20and%20Readiness%20Codes/ 
+ 
+Monitors, Trips, Drive Cycles and Readiness Codes How to Set Readiness Codes 
+ Malfunction Indicator Lamp (MIL) Indication (In relation to Readiness Codes) 
+The vehicle has certain "readiness codes" that are part of the on-board diagnostics for the emissions systems. If the vehicle's battery has been disconnected or gone dead, if the DTCs have been cleared, or if the ECM/PCM has been reset, these codes are reset. In some states, part of the emissions testing is to make sure these codes are set to complete. If all of them are not set to complete, the vehicle may fail the emission test, or the test cannot be finished.
+To check if the readiness codes are complete, turn the ignition switch ON (II), but do not start the engine. The MIL will come on for 15-20 seconds . If it then goes off, the readiness codes are complete. If it blinks five times, one or more readiness codes are not complete. To set readiness codes from incomplete to complete, do the procedure for the appropriate code.
+ Catalytic Converter Monitor and Readiness Code 
+ NOTE: 
+ - Do not turn the ignition switch off during the procedure.
+ - All readiness codes are cleared when the battery is disconnected or when the ECM/PCM is cleared with the scan tool or the HDS.
+ - Low ambient temperatures or excessive stop-and-go traffic may increase the drive time needed to switch the readiness code from incomplete to complete.
+ - The readiness code will not switch to complete until all the enable criteria are met.
+ - If a fault in the secondary HO2S system caused the MIL to come on, the readiness code cannot be set to complete until you correct the fault.
+ Enable Criteria 
+ - ECT at 158 °F (70 °C) or higher.
+ - Intake air temperature (IAT) at 20 °F (-7 °C) or higher.
+ - Vehicle speed is steady, and vehicle speed sensor (VSS) reads more then 25 mph (40 km/h) .
+ Procedure 
+ When the HDS is used 
+ 1. Connect the HDS to the vehicle's data link connector (DLC), and bring up the READINESS CODE screen for Catalyst the DTCs MENU.
+ 2. Start the engine.
+ 3. Test-drive the vehicle under stop-and-go condition with short periods of steady cruise. After about 5 miles (8 km) , the readiness code should switch to complete.
+ 4. If the readiness code is still not set to incomplete, check for a temporary DTC with the HDS. If there is no DTC, one or more of the enable criteria were probably not met; repeat the procedure.
+ When the Scan Tool is used 
+ 1. Connect the scan tool to the vehicle's data link connector (DLC), and bring up the tool's generic OBD II mode.
+ 2. Start the engine.
+ 3. Test-drive the vehicle under stop-and-go conditions with short periods of steady cruise. After about 5 miles (8 km) , the readiness code should switch from incomplete to complete.
+ 4. If the readiness code is still set to incomplete, check for a temporary DTC. If there is no DTC, one or more of the enable criteria were probably not met; repeat the procedure.
+ Evaporative Emission (EVAP) Control System Monitor and Readiness code 
+ NOTE: 
+ - All readiness codes are cleared when the battery is disconnected or when the ECM/PCM is cleared with the scan tool or the HDS.
+ - The enable criteria must be repeated if the intake air temperature (IAT) drops lower then 36°F (20°C) from its value at engine start up.
+ Enable Criteria 
+ - At engine start up, ECT and IAT are higher then 32 °F (0 °C) , but lower then 95 °F (35 °C) .
+ - At engine start up, the ECT and IAT are within 12 °F (7 °C) of each other.
+ Procedure 
+ When the HDS is used 
+ 1. Connect the HDS to the vehicle's data link connector (DLC).
+ 2. Start the engine.
+ 3. Select EVAP TEST in the INSPECTION MENU with the HDS, then select the FUNCTION TEST in the EVAP TEST MENU.
+ - If the functions are normal, readiness is complete.
+ - If the functions are not normal, go to the next step.
+ 4. If the readiness code is still not set to complete, check for a temporary DTC. If there is no DTC, one or more of the enable criteria were probably not met; repeat the procedure.
+ When the Scan Tool is used 
+ 1. Connect the scan tool to the vehicle's data link connector (DLC), and bring up the tool's generic OBD II mode.
+ 2. Start the engine.
+ 3. Test-drive the vehicle under stop-and-go conditions with short periods of steady cruise. After about 2.5 miles (4.0 km) , the readiness code should switch from incomplete to complete.
+ 4. If the readiness code is still set to incomplete, check for a temporary DTC. If there is no DTC, one or more of the enable criteria were probably not met; repeat the procedure.
+ Air Fuel Ratio (A/F) Sensor Monitor and Readiness Code 
+ NOTE: 
+ - Do not turn the ignition switch off during the procedure.
+ - All readiness codes are cleared when the battery is disconnected or when the ECM/PCM is cleared with the scan tool or the HDS.
+ Enable Criteria 
+ECT at 140 °F (60 °C) or higher.
+ Procedure 
+ When the HDS is used 
+ 1. Start the engine.
+ 2. Test-drive vehicle under stop-and-go conditions with short periods of steady cruise. During the drive, decelerate (with the throttle fully closed) for 5 seconds . After about 3.5 miles (5.6 km) , the readiness code should switch from incomplete to complete.
+ 3. Check the readiness codes screen for the Air Fuel Ratio (A/F) Sensor in the DTCs MENU with the HDS
+ - If the screen shows complete, readiness is complete.
+ - If the screen shows not complete, go to the next step.
+ 4. Check for a temporary DTC. If there is no DTC, the enable criteria was probably not met. Select the DATA LIST Menu. Check the ECT in the ALL DATA LIST with the HDS. If the ECT is lower than 140 °F (60 °C) , run the engine until it is higher than 140 °F (60 °C) , then repeat the procedure.
+ When the Scan Tool is used 
+ 1. Connect the scan tool to the vehicle's data link connector (DLC), and bring up the tool's generic OBD II mode.
+ 2. Start the engine.
+ 3. Test-drive the vehicle under stop-and-go conditions with short periods of steady cruise. During the drive, decelerate (with the throttle fully closed) for 5 seconds . After about 3.5 miles (5.6 km) , the readiness code should switch from incomplete to complete.
+ 4. If the readiness code is still set to incomplete, check for a temporary DTC. If there is no DTC, the enable criteria was probably not met; repeat the procedure.
+ Air/Fuel Ratio (A/F) Sensor Heater Monitor Readiness Code 
+ NOTE: All readiness codes are cleared when the battery is disconnected or when the ECM/PCM is cleared with the scan tool or the HDS.
+ Procedure 
+ 1. Connect the scan tool or the HDS to the vehicle's data link connector (DLC). Bring up the tool's generic OBD II mode (scan tool only).
+ 2. Start the engine, and let it idle for 1 minute . The readiness code should switch from incomplete to complete.
+ 3. If the readiness code is still set to incomplete, check for a temporary DTC. If there is no DTC, repeat the procedure.
+ Misfire Monitor and Readiness Code 
+ - This readiness code is always set to available because misfiring is continuously monitored.
+ - Monitoring pauses, and the misfire counter resets, if the vehicle is driven over a rough road.
+ - Monitoring also pauses, and the misfire counter holds at its current value, if the throttle position changes more than a predetermined value, or if driving conditions fall outside the range of any related enable criteria.
+ Fuel System Monitor and Readiness Code 
+ - This readiness code is always set to available because the fuel system is continuously monitored during closed loop operation.
+ - Monitoring pauses when the catalytic converter , EVAP control system, and A/F sensor monitors are active.
+ - Monitoring also pauses when any related enable criteria are not being met. Monitoring resumes when the enable criteria is again being met.
+ Comprehensive Component Monitor and Readiness Code 
+This readiness code is always set to available because the comprehensive component monitor is continuously running whenever the engine is cranking or running.
+

@@ -1,4 +1,4 @@
-//! The three vehicles carlink knows in depth. Facts cite the vehicle-diagnostics wiki.
+//! The three vehicles carlink knows in depth. Facts cite the wiki in `kb/wiki/`.
 
 mod crv;
 pub mod kona;
@@ -33,7 +33,7 @@ pub struct Profile {
     pub id: &'static str,
     pub name: &'static str,
     pub powertrain: Powertrain,
-    /// Wiki page (under ~/wikikb/vehicle-diagnostics/wiki/) with everything known about this car.
+    /// Wiki page (`kb/wiki/<name>.md` in the carlink repo) with everything known about this car.
     pub wiki: &'static str,
     pub recalls: &'static [&'static str],
     pub notes: &'static [&'static str],

@@ -1,0 +1,2611 @@
+{{Short description|Codes used for on-board diagnostics}}
+'''OBD-II PIDs''' ([[On-board diagnostics]] '''Parameter IDs''') are codes used to request data from a vehicle, used as a diagnostic tool.
+
+[[SAE International|SAE]] standard J1979 defines many OBD-II PIDs. All on-road vehicles and trucks sold in North America are required to support a subset of these codes, primarily for state mandated [[vehicle emissions control|emissions]] [[vehicle inspection|inspections]]. Manufacturers also define additional PIDs specific to their vehicles. Though not mandated, many motorcycles also support OBD-II PIDs.
+
+In 1996, light-duty vehicles (less than {{convert|8500|lb|abbr=on|disp=or}}) were the first to be mandated followed by medium duty vehicles ({{convert|8500|–|14000|lb|abbr=on|disp=or}}) in 2005.<ref name=epa>{{cite web |url=https://www.epa.gov/state-and-local-transportation |title=Basic Information {{!}} On-Board Diagnostics (OBD) |publisher=US EPA |date=16 March 2015 |access-date=24 June 2015}}</ref> They are both required to be accessed through a standardized [[Data link connector (automotive)|data link connector]] defined by [[SAE J1962]].
+
+Heavy-duty vehicles (greater than {{convert|14000|lb|abbr=on|disp=or}}) made after 2010,<ref name=epa /> for sale in the US are allowed to support OBD-II diagnostics through [[SAE J1939|SAE standard J1939-13]] (a round diagnostic connector) according to CARB in title 13 CCR 1971.1.  Some heavy-duty trucks in North America use the SAE J1962 OBD-II diagnostic connector that is common with passenger cars, notably Mack and [[Volvo Trucks]], however they use 29 bit CAN identifiers (unlike 11 bit headers used by passenger cars).
+
+== Services / Modes ==
+There are 10 diagnostic services described in the latest OBD-II standard SAE J1979. Before 2002, J1979 referred to these services as "modes". They are as follows:
+
+{| class="wikitable"
+! Service / Mode (hex) !! Description
+|-
+| align="center" | [[#Service 01|{{mono|01}}]] || Show current data
+|-
+| align="center" | [[#Service 02|{{mono|02}}]] || Show freeze frame data
+|-
+| align="center" | [[#Service 03|{{mono|03}}]] || Show stored Diagnostic Trouble Codes
+|-
+| align="center" | [[#Service 04|{{mono|04}}]] || Clear Diagnostic Trouble Codes and stored values
+|-
+| align="center" | [[#Service 05|{{mono|05}}]] || Test results, oxygen sensor monitoring (non CAN only)
+|-
+| align="center" | {{mono|06}} || Test results, other component/system monitoring (Test results, oxygen sensor monitoring for CAN only)
+|-
+| align="center" | {{mono|07}} || Show pending Diagnostic Trouble Codes (detected during current or last driving cycle)
+|-
+| align="center" | {{mono|08}} || Control operation of on-board component/system
+|-
+| align="center" | [[#Service 09|{{mono|09}}]] || Request vehicle information
+|-
+| align="center" | {{mono|0A}} || Permanent [[Diagnostic Trouble Code]]s (DTCs) (Cleared DTCs)
+|}
+
+Vehicle manufacturers are not required to support all services. Each manufacturer may define additional services above #9 (e.g.: service 22 as defined by SAE J2190 for Ford/GM, service 21 for Toyota) for other information e.g. the voltage of the traction battery in a [[hybrid electric vehicle]] (HEV).<ref>{{cite web|title=Escape PHEV TechInfo - PIDs|url=http://www.eaa-phev.org/wiki/Escape_PHEV_TechInfo#PIDs|work=Electric Auto Association - Plug in Hybrid Electric Vehicle|access-date=11 December 2013}}</ref>
+
+The nonOBD [[Unified Diagnostic Services|UDS]] services start at 0x10 to avoid overlap of ID-range.
+
+== Standard PIDs ==
+The table below shows the standard OBD-II PIDs as defined by SAE J1979. The expected response for each PID is given, along with information on how to translate the response into meaningful data. Again, not all vehicles will support all PIDs and there can be manufacturer-defined custom PIDs that are not defined in the OBD-II standard.
+
+Note that services 01 and 02 are basically identical, except that service 01 provides current information, whereas service 02 provides a snapshot of the same data taken at the point when the last diagnostic trouble code was set. The exceptions are PID 01, which is only available in service 01, and PID 02, which is only available in service 02. If service 02 PID 02 returns zero, then there is no snapshot and all other service 02 data is meaningless.
+
+When using Bit-Encoded-Notation, quantities like C4 means bit 4 from data byte C. Each bit is numbered from 0 to 7, so 7 is the most significant bit and 0 is the least significant bit ([[#Service 01 PID 00|See below]]).
+
+{| class="wikitable"
+|- align=center
+| colspan=8 | A
+| colspan=8 | B
+| colspan=8 | C
+| colspan=8 | D
+|- align=center
+| A7 || A6 || A5 || A4 || A3 || A2 || A1 || A0
+| B7 || B6 || B5 || B4 || B3 || B2 || B1 || B0
+| C7 || C6 || C5 || C4 || C3 || C2 || C1 || C0
+| D7 || D6 || D5 || D4 || D3 || D2 || D1 || D0
+|}
+
+=== Service {{mono|01}} - Show current data<span class="anchor" id="Service 01"></span> ===
+{| class="wikitable sortable" style="text-align: center"
+|+
+! PIDs<br />(hex)
+! PID<br />(Dec)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula|In the formula column, letters A, B, C, etc. represent the first, second, third, etc. byte of the data. For example, for two data bytes <code>0F 19</code>, <code>A {{=}} 0F</code> and <code>B {{=}} 19</code>. Where a (?) appears, contradictory or incomplete information was available. <!-- Someone with a copy of the 2006 SAE HS-3000 should fact-check these.-->}}
+|-
+| {{mono|00}}
+| {{mono|0}}
+| 4
+| align="left" | PIDs supported [$01 - $20]
+|
+|
+|
+| align="left" | Bit encoded [A7..D0] == [PID $01..PID $20] [[#Service 01 PID 00|See below]]
+|-
+| {{mono|01}}
+| {{mono|1}}
+| 4
+| align="left" | Monitor status since DTCs cleared. (Includes malfunction indicator lamp (MIL), status and number of DTCs, components tests, DTC readiness checks)
+|
+|
+|
+| align="left" | Bit encoded. [[#Service 01 PID 01|See below]]
+|-
+| {{mono|02}}
+| {{mono|2}}
+| 2
+| align=left | DTC that caused freeze frame to be stored.
+|
+|
+|
+| align=left | [[#Service 03 (no PID required)|Decoded as in service 3]]
+|-
+| {{mono|03}}
+| {{mono|3}}
+| 2
+| align="left" | Fuel system status
+|
+|
+|
+| align="left" | Bit encoded. [[#Service 01 PID 03|See below]]
+|-
+| {{mono|04}}
+| {{mono|4}}
+| 1
+| align="left" | Calculated engine load
+| 0
+| 100
+| %
+| align="left" | <math>\tfrac{100}{255} A</math> (or <math>\tfrac {A} {2.55}</math>)
+|-
+| {{mono|05}}
+| {{mono|5}}
+| 1
+| align="left" | Engine coolant temperature
+| -40
+| 215
+| °C
+| align="left" | <math>A - 40</math>
+|-
+| {{mono|06}}
+| {{mono|6}}
+| 1
+| align="left" | Short term fuel trim (STFT)&mdash;Bank 1
+| rowspan="4" | -100 (Reduce Fuel: Too Rich)
+| rowspan="4" | 99.2 (Add Fuel: Too Lean)
+| rowspan="4" | %
+| rowspan="4" align="left" | <math display="block">\frac{100}{128} A - 100</math>(or <math>\tfrac{A}{1.28} - 100</math> )
+|-
+| {{mono|07}}
+| {{mono|7}}
+| 1
+| align="left" | Long term fuel trim (LTFT)&mdash;Bank 1
+|-
+| {{mono|08}}
+| {{mono|8}}
+| 1
+| align="left" | Short term fuel trim (STFT)&mdash;Bank 2
+|-
+| {{mono|09}}
+| {{mono|9}}
+| 1
+| align="left" | Long term fuel trim (LTFT)&mdash;Bank 2
+|-
+| {{mono|0A}}
+| {{mono|10}}
+| 1
+| align="left" | Fuel pressure ([[Pressure measurement#Absolute, gauge and differential pressures - zero reference|gauge pressure]])
+| 0
+| 765
+| kPa
+| align="left" | <math>3 A</math>
+|-
+| {{mono|0B}}
+| {{mono|11}}
+| 1
+| align="left" | Intake manifold absolute pressure
+| 0
+| 255
+| kPa
+| align="left" | <math>A</math>
+|-
+| {{mono|0C}}
+| {{mono|12}}
+| 2
+| align="left" | Engine speed
+| 0
+| 16,383.75
+| rpm
+| align="left" | <math> \frac{256 A + B}{4}</math>
+|-
+| {{mono|0D}}
+| {{mono|13}}
+| 1
+| align="left" | Vehicle speed
+| 0
+| 255
+| km/h
+| align="left" | <math>A</math>
+|-
+| {{mono|0E}}
+| {{mono|14}}
+| 1
+| align="left" | Timing advance
+| -64
+| 63.5
+| ° before [[Dead centre (engineering)|TDC]]
+| align="left" | <math>\frac{A}{2} - 64</math> 
+|-
+| {{mono|0F}}
+| {{mono|15}}
+| 1
+| align="left" | Intake air temperature
+| -40
+| 215
+| °C
+| align="left" | <math>A - 40</math>
+|-
+| {{mono|10}}
+| {{mono|16}}
+| 2
+| align="left" | [[Mass airflow sensor|Mass air flow sensor (MAF)]] air flow rate
+| 0
+| 655.35
+| g/s
+| align="left" | <math> \frac{256 A + B}{100}</math>
+|-
+| {{mono|11}}
+| {{mono|17}}
+| 1
+| align="left" | Throttle position
+| 0
+| 100
+| %
+| align="left" | <math>\tfrac{100}{255} A</math>
+|-
+| {{mono|12}}
+| {{mono|18}}
+| 1
+| align="left" | Commanded secondary air status
+|
+|
+|
+| align="left" | Bit encoded. [[#Service 01 PID 12|See below]]
+|-
+| {{mono|13}}
+| {{mono|19}}
+| 1
+| align="left" | Oxygen sensors present (in 2 banks)
+|
+|
+|
+| align="left" | [A0..A3] == Bank 1, Sensors 1-4. [A4..A7] == Bank 2...
+|-
+| {{mono|14}}
+| {{mono|20}}
+| 2
+| align="left" | Oxygen Sensor 1<BR>A: Voltage<BR>B: Short term fuel trim
+| rowspan="8" | 0<BR>-100
+| rowspan="8" | 1.275<BR>99.2
+| rowspan="8" | V
+%
+| rowspan="8" align="left" | <math display="block">\frac{A}{200}</math><math display="block">\frac{100}{128} B - 100</math>(if B==$FF, sensor is not used in trim calculation)
+|-
+| {{mono|15}}
+| {{mono|21}}
+| 2
+| align="left" |Oxygen Sensor 2<BR>A: Voltage<BR>B: Short term fuel trim
+|-
+| {{mono|16}}
+| {{mono|22}}
+| 2
+| align="left" |Oxygen Sensor 3<BR>A: Voltage<BR>B: Short term fuel trim
+|-
+| {{mono|17}}
+| {{mono|23}}
+| 2
+| align="left" |Oxygen Sensor 4<BR>A: Voltage<BR>B: Short term fuel trim
+|-
+| {{mono|18}}
+| {{mono|24}}
+| 2
+| align="left" |Oxygen Sensor 5<BR>A: Voltage<BR>B: Short term fuel trim
+|-
+| {{mono|19}}
+| {{mono|25}}
+| 2
+| align="left" |Oxygen Sensor 6<BR>A: Voltage<BR>B: Short term fuel trim
+|-
+| {{mono|1A}}
+| {{mono|26}}
+| 2
+| align="left" |Oxygen Sensor 7<BR>A: Voltage<BR>B: Short term fuel trim
+|-
+| {{mono|1B}}
+| {{mono|27}}
+| 2
+| align="left" |Oxygen Sensor 8<BR>A: Voltage<BR>B: Short term fuel trim
+|-
+| {{mono|1C}}
+| {{mono|28}}
+| 1
+| align="left" | OBD standards this vehicle conforms to
+| 1
+| 250
+|
+| align="left" | [[Enumerated type|enumerated]]. [[#Service 01 PID 1C|See below]]
+|-
+| {{mono|1D}}
+| {{mono|29}}
+| 1
+| align="left" | Oxygen sensors present (in 4 banks)
+|
+|
+|
+| align="left" | Similar to PID $13, but [A0..A7] == [B1S1, B1S2, B2S1, B2S2, B3S1, B3S2, B4S1, B4S2]
+|-
+| {{mono|1E}}
+| {{mono|30}}
+| 1
+| align="left" | Auxiliary input status
+|
+|
+|
+| align="left" | A0 == [[Power Take Off]] (PTO) status (1 == active)<BR>[A1..A7] not used
+|-
+| {{mono|1F}}
+| {{mono|31}}
+| 2
+| align="left" | Run time since engine start
+| 0
+| 65,535
+| s
+| align="left" |<math>256 A + B</math>
+|-
+| {{mono|20}}
+| {{mono|32}}
+| 4
+| align="left" | PIDs supported [$21 - $40]
+|
+|
+|
+| align="left" | Bit encoded [A7..D0] == [PID $21..PID $40] [[#Service 01 PID 00|See below]]
+|-
+| {{mono|21}}
+| {{mono|33}}
+| 2
+| align="left" | Distance traveled with malfunction indicator lamp (MIL) on
+| 0
+| 65,535
+| km
+| align="left" |<math>256 A + B</math>
+|-
+| {{mono|22}}
+| {{mono|34}}
+| 2
+| align="left" | [[Fuel rail|Fuel Rail]] Pressure (relative to manifold vacuum)
+| 0
+| 5177.265
+| kPa
+| align="left" | <math>0.079 (256 A + B)</math>
+|-
+| {{mono|23}}
+| {{mono|35}}
+| 2
+| align="left" | [[Fuel rail|Fuel Rail]] Gauge Pressure (diesel, or gasoline direct injection)
+| 0
+| 655,350
+| kPa
+| align="left" | <math>10 (256 A + B)</math>
+|-
+| {{mono|24}}
+| {{mono|36}}
+| 4
+| align="left" | Oxygen Sensor 1<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+| rowspan="8" | 0<BR>0
+| rowspan="8" | < 2<BR>< 8
+| rowspan="8" | ratio<BR>V
+| rowspan="8" align="left" | <math display="block">\frac{2}{65536} (256 A + B)</math><math display="block">\frac{8}{65536} (256 C + D)</math>
+|-
+| {{mono|25}}
+| {{mono|37}}
+| 4
+| align="left" |Oxygen Sensor 2<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+|-
+| {{mono|26}}
+| {{mono|38}}
+| 4
+| align="left" |Oxygen Sensor 3<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+|-
+| {{mono|27}}
+| {{mono|39}}
+| 4
+| align="left" |Oxygen Sensor 4<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+|-
+| {{mono|28}}
+| {{mono|40}}
+| 4
+| align="left" |Oxygen Sensor 5<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+|-
+| {{mono|29}}
+| {{mono|41}}
+| 4
+| align="left" |Oxygen Sensor 6<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+|-
+| {{mono|2A}}
+| {{mono|42}}
+| 4
+| align="left" |Oxygen Sensor 7<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+|-
+| {{mono|2B}}
+| {{mono|43}}
+| 4
+| align="left" |Oxygen Sensor 8<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Voltage
+|-
+| {{mono|2C}}
+| {{mono|44}}
+| 1
+| align="left" | Commanded [[Exhaust gas recirculation|EGR]]
+| 0
+| 100
+| %
+| align="left" |<math>\tfrac{100}{255} A</math>
+|-
+| {{mono|2D}}
+| {{mono|45}}
+| 1
+| align="left" | EGR Error
+| -100
+| 99.2
+| %
+| align="left" | <math>\tfrac{100}{128} A - 100</math>
+|-
+| {{mono|2E}}
+| {{mono|46}}
+| 1
+| align="left" | Commanded evaporative purge
+| 0
+| 100
+| %
+| align="left" |<math>\tfrac{100}{255} A</math>
+|-
+| {{mono|2F}}
+| {{mono|47}}
+| 1
+| align="left" | Fuel Tank Level Input
+| 0
+| 100
+| %
+| align="left" |<math>\tfrac{100}{255} A</math>
+|-
+| {{mono|30}}
+| {{mono|48}}
+| 1
+| align="left" | Warm-ups since codes cleared
+| 0
+| 255
+|
+| align="left" | <math>A</math>
+|-
+| {{mono|31}}
+| {{mono|49}}
+| 2
+| align="left" | Distance traveled since codes cleared
+| 0
+| 65,535
+| km
+| align="left" |<math>256 A + B</math>
+|-
+| {{mono|32}}
+| {{mono|50}}
+| 2
+| align="left" | Evap. System Vapor Pressure
+| -8,192
+| 8191.75
+| Pa
+| align="left" | <math> \frac{256 A + B}{4}</math>
+(AB is [[two's complement]] signed)<ref name=":0">{{cite web|title=Extended PID's - Signed Variables|url=http://torque-bhp.com/forums/?wpforumaction=viewtopic&t=1981.0#postid-1199516|website=Torque-BHP|access-date=17 March 2016}}</ref>
+|-
+| {{mono|33}}
+| {{mono|51}}
+| 1
+| align="left" | Absolute Barometric Pressure
+| 0
+| 255
+| kPa 
+| align="left" | <math>A</math>
+|-
+| {{mono|34}}
+| {{mono|52}}
+| 4
+| align="left" | Oxygen Sensor 1<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+| rowspan="8" | 0<BR>-128
+| rowspan="8" | < 2<BR><128
+| rowspan="8" | ratio<BR>mA
+| rowspan="8" align="left" | <math display="block">\frac{2}{65536} (256 A + B)</math><math display="block">\frac{256 C + D}{256} - 128</math>
+|-
+| {{mono|35}}
+| {{mono|53}}
+| 4
+| align="left" |Oxygen Sensor 2<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+|-
+| {{mono|36}}
+| {{mono|54}}
+| 4
+| align="left" |Oxygen Sensor 3<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+|-
+| {{mono|37}}
+| {{mono|55}}
+| 4
+| align="left" |Oxygen Sensor 4<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+|-
+| {{mono|38}}
+| {{mono|56}}
+| 4
+| align="left" |Oxygen Sensor 5<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+|-
+| {{mono|39}}
+| {{mono|57}}
+| 4
+| align="left" |Oxygen Sensor 6<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+|-
+| {{mono|3A}}
+| {{mono|58}}
+| 4
+| align="left" |Oxygen Sensor 7<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+|-
+| {{mono|3B}}
+| {{mono|59}}
+| 4
+| align="left" |Oxygen Sensor 8<BR>AB: Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])<BR>CD: Current
+|-
+| {{mono|3C}}
+| {{mono|60}}
+| 2
+| align="left" | Catalyst Temperature: Bank 1, Sensor 1
+| rowspan="4" | -40
+| rowspan="4" | 6,513.5
+| rowspan="4" | °C
+| rowspan="4" align="left" | <math>\frac{256 A + B}{10} - 40</math>
+|-
+| {{mono|3D}}
+| {{mono|61}}
+| 2
+| align="left" | Catalyst Temperature: Bank 2, Sensor 1
+|-
+| {{mono|3E}}
+| {{mono|62}}
+| 2
+| align="left" | Catalyst Temperature: Bank 1, Sensor 2
+|-
+| {{mono|3F}}
+| {{mono|63}}
+| 2
+| align="left" | Catalyst Temperature: Bank 2, Sensor 2
+|-
+| {{mono|40}}
+| {{mono|64}}
+| 4
+| align="left" | PIDs supported [$41 - $60]
+|
+|
+|
+| align="left" | Bit encoded [A7..D0] == [PID $41..PID $60] [[#Service 01 PID 00|See below]]
+|-
+| {{mono|41}}
+| {{mono|65}}
+| 4
+| align="left" | Monitor status this drive cycle
+|
+|
+|
+| align="left" | Bit encoded. [[#Service 01 PID 41|See below]]
+|-
+| {{mono|42}}
+| {{mono|66}}
+| 2
+| align="left" | Control module voltage
+| 0
+| 65.535
+| V
+| align="left" | <math>\frac{256A + B}{1000}</math>
+|-
+| {{mono|43}}
+| {{mono|67}}
+| 2
+| align="left" | Absolute load value
+| 0
+| 25,700
+| %
+| align="left" | <math>\tfrac{100}{255} (256A + B)</math>
+|-
+| {{mono|44}}
+| {{mono|68}}
+| 2
+| align="left" | Commanded Air-Fuel Equivalence Ratio ([[Air–fuel ratio#Air–fuel equivalence ratio (λ)|lambda,λ]])
+| 0
+| < 2
+| ratio
+| align="left" | <math>\tfrac{2}{65536} (256 A + B)</math>
+|-
+| {{mono|45}}
+| {{mono|69}}
+| 1
+| align="left" | Relative throttle position
+| 0
+| 100
+| %
+| align="left" |<math>\tfrac{100}{255} A</math>
+|-
+| {{mono|46}}
+| {{mono|70}}
+| 1
+| align="left" | Ambient air temperature
+| -40
+| 215
+| °C
+| align="left" | <math>A - 40</math>
+|-
+| {{mono|47}}
+| {{mono|71}}
+| 1
+| align="left" | Absolute throttle position B
+| rowspan="6" | 0
+| rowspan="6" | 100
+| rowspan="6" | %
+| rowspan="6" align="left" |<math>\frac{100}{255} A</math>
+|-
+| {{mono|48}}
+| {{mono|72}}
+| 1
+| align="left" | Absolute throttle position C
+|-
+| {{mono|49}}
+| {{mono|73}}
+| 1
+| align="left" | Accelerator pedal position D
+|-
+| {{mono|4A}}
+| {{mono|74}}
+| 1
+| align="left" | Accelerator pedal position E
+|-
+| {{mono|4B}}
+| {{mono|75}}
+| 1
+| align="left" | Accelerator pedal position F
+|-
+| {{mono|4C}}
+| {{mono|76}}
+| 1
+| align="left" | Commanded throttle actuator
+|-
+| {{mono|4D}}
+| {{mono|77}}
+| 2
+| align="left" | Time run with MIL on
+| rowspan="2" | 0
+| rowspan="2" | 65,535
+| rowspan="2" | min
+| rowspan="2" align="left" |<math>256 A + B</math>
+|-
+| {{mono|4E}}
+| {{mono|78}}
+| 2
+| align="left" | Time since trouble codes cleared
+|-
+| {{mono|4F}}
+| {{mono|79}}
+| 4
+| align="left" | Maximum value for Fuel–Air equivalence ratio, oxygen sensor voltage, oxygen sensor current, and intake manifold absolute pressure
+| 0, 0, 0, 0
+| 255, 255, 255, 2550
+|ratio, V, mA, kPa
+| align="left" | <math>A</math>, <math>B</math>, <math>C</math>, <math>D \times 10</math>
+|-
+| {{mono|50}}
+| {{mono|80}}
+| 4
+| align="left" | Maximum value for air flow rate from mass air flow sensor
+| 0
+| 2550
+| g/s
+| align="left" | <math>A \times 10</math>; <math>B</math>, <math>C</math>, and <math>D</math> are reserved for future use
+|-
+| {{mono|51}}
+| {{mono|81}}
+| 1
+| align="left" | Fuel Type
+|
+|
+|
+| align="left" | From fuel type table [[#Fuel Type Coding|see below]]
+|-
+| {{mono|52}}
+| {{mono|82}}
+| 1
+| align="left" | Ethanol fuel %
+| 0
+| 100
+| %
+| align="left" |<math>\tfrac{100}{255} A</math>
+|-
+| {{mono|53}}
+| {{mono|83}}
+| 2
+| align="left" | Absolute Evap system Vapor Pressure
+| 0
+| 327.675
+| kPa
+| align="left" | <math>\frac{256A + B}{200}</math>
+|-
+| {{mono|54}}
+| {{mono|84}}
+| 2
+| align="left" | Evap system vapor pressure
+| -32,768
+| 32,767
+| Pa
+| align="left" | <math>256 A + B</math>(AB is [[two's complement]] signed)<ref name=":0" />
+|-
+| {{mono|55}}
+| {{mono|85}}
+| 2
+| align="left" | Short term secondary oxygen sensor trim, A: bank 1, B: bank 3
+| rowspan="4" | -100
+| rowspan="4" | 99.2
+| rowspan="4" | %
+| rowspan="4" align="left" | <math>\frac{100}{128}A - 100</math>
+
+<math>\frac{100}{128} B - 100</math>
+|-
+| {{mono|56}}
+| {{mono|86}}
+| 2
+| align="left" | Long term secondary oxygen sensor trim, A: bank 1, B: bank 3
+|-
+| {{mono|57}}
+| {{mono|87}}
+| 2
+| align="left" | Short term secondary oxygen sensor trim, A: bank 2, B: bank 4
+|-
+| {{mono|58}}
+| {{mono|88}}
+| 2
+| align="left" | Long term secondary oxygen sensor trim, A: bank 2, B: bank 4
+|-
+| {{mono|59}}
+| {{mono|89}}
+| 2
+| align="left" | [[Fuel rail]] absolute pressure
+| 0
+| 655,350
+| kPa
+| align="left" |<math>10 (256 A + B)</math>
+|-
+| {{mono|5A}}
+| {{mono|90}}
+| 1
+| align="left" | Relative accelerator pedal position
+| 0
+| 100
+| %
+| align="left" |<math>\tfrac{100}{255} A</math>
+|-
+| {{mono|5B}}
+| {{mono|91}}
+| 1
+| align="left" | Hybrid battery pack remaining life
+| 0
+| 100
+| %
+| align="left" |<math>\tfrac{100}{255} A</math>
+|-
+| {{mono|5C}}
+| {{mono|92}}
+| 1
+| align="left" | Engine oil temperature
+| -40
+| 210
+| °C
+| align="left" |<math>A - 40</math>
+|-
+| {{mono|5D}}
+| {{mono|93}}
+| 2
+| align="left" | Fuel injection timing
+| -210.00
+| 301.992
+| °
+| align="left" | <math>\frac{256A + B}{128} - 210</math>
+|-
+| {{mono|5E}}
+| {{mono|94}}
+| 2
+| align="left" | Engine fuel rate
+| 0
+| 3212.75
+| L/h
+| align="left" | <math>\frac{256A + B}{20}</math>
+|-
+| {{mono|5F}}
+| {{mono|95}}
+| 1
+| align="left" | Emission requirements to which vehicle is designed
+|
+|
+|
+| align="left" | Bit Encoded
+|-
+| {{mono|60}}
+| {{mono|96}}
+| 4
+| align="left" | PIDs supported [$61 - $80]
+|
+|
+|
+| align="left" | Bit encoded [A7..D0] == [PID $61..PID $80] [[#Service 01 PID 00|See below]]
+|-
+| {{mono|61}}
+| {{mono|97}}
+| 1
+| align="left" | Driver's demand engine - percent torque
+| -125
+| 130
+| %
+| align="left" | <math>A-125</math>
+|-
+| {{mono|62}}
+| {{mono|98}}
+| 1
+| align="left" | Actual engine - percent torque
+| -125
+| 130
+| %
+| align="left" | <math>A-125</math>
+|-
+| {{mono|63}}
+| {{mono|99}}
+| 2
+| align="left" | Engine reference torque
+| 0
+| 65,535
+| N&sdot;m
+| align="left" |<math>256 A + B</math>
+|-
+| {{mono|64}}
+| {{mono|100}}
+| 5
+| align="left" | Engine percent torque data
+| -125
+| 130
+| %
+| align="left" | <math>A-125</math> Idle<BR><math>B-125</math> Engine point 1<BR><math>C-125</math> Engine point 2<BR><math>D-125</math> Engine point 3<BR><math>E-125</math> Engine point 4
+|-
+| {{mono|65}}
+| {{mono|101}}
+| 2
+| align="left" | Auxiliary input / output supported
+|
+|
+|
+| align="left" | Bit Encoded
+|-
+| {{mono|66}}
+| {{mono|102}}
+| 5
+| align="left" | Mass air flow sensor
+|0
+|2047.96875
+|g/s
+|[A0]== Sensor A Supported<BR>[A1]== Sensor B Supported<BR>Sensor A:<math> \frac{256B+C}{32}</math><BR>Sensor B:<math> \frac{256D+E}{32}</math>
+|-
+| {{mono|67}}
+| {{mono|103}}
+| 3
+| align="left" | Engine coolant temperature
+| -40
+|215
+| °C
+|[A0]== Sensor 1 Supported<BR>[A1]== Sensor 2 Supported<BR>Sensor 1:<math>B-40</math><BR>Sensor 2:<math>C-40</math>
+|-
+| {{mono|68}}
+| {{mono|104}}
+| 3
+| align="left" | Intake air temperature sensor
+| -40
+|215
+| °C
+|[A0]== Sensor 1 Supported<BR>[A1]== Sensor 2 Supported<BR>Sensor 1:<math>B-40</math><BR>Sensor 2:<math>C-40</math>
+|-
+| {{mono|69}}
+| {{mono|105}}
+| 7
+| align="left" | Actual EGR, Commanded EGR, and EGR Error
+|
+|
+|
+| align="left" |
+|-
+| {{mono|6A}}
+| {{mono|106}}
+| 5
+| align="left" | Commanded Diesel intake air flow control and relative intake air flow position
+|
+|
+|
+| align="left" |
+|-
+| {{mono|6B}}
+| {{mono|107}}
+| 5
+| align="left" | Exhaust gas recirculation temperature
+|
+|
+|
+| align="left" |
+|-
+| {{mono|6C}}
+| {{mono|108}}
+| 5
+| align="left" | Commanded throttle actuator control and relative throttle position
+|
+|
+|
+| align="left" |
+|-
+| {{mono|6D}}
+| {{mono|109}}
+| 11
+| align="left" | Fuel pressure control system
+|
+|
+|
+| align="left" |
+|-
+| {{mono|6E}}
+| {{mono|110}}
+| 9
+| align="left" | Injection pressure control system
+|
+|
+|
+| align="left" |
+|-
+| {{mono|6F}}
+| {{mono|111}}
+| 3
+| align="left" | Turbocharger compressor inlet pressure
+|
+|
+|
+| align="left" |
+|-
+| {{mono|70}}
+| {{mono|112}}
+| 10
+| align="left" | Boost pressure control
+|0
+|2047.96875
+|kPa
+| align="left" |Sensor 1: <math>\frac{256D+E}{0.03125}</math>
+|-
+| {{mono|71}}
+| {{mono|113}}
+| 6
+| align="left" | Variable Geometry turbo (VGT) control
+|
+|
+|
+| align="left" |
+|-
+| {{mono|72}}
+| {{mono|114}}
+| 5
+| align="left" | Wastegate control
+|
+|
+|
+| align="left" |
+|-
+| {{mono|73}}
+| {{mono|115}}
+| 5
+| align="left" | Exhaust pressure
+|
+|
+|
+| align="left" |
+|-
+| {{mono|74}}
+| {{mono|116}}
+| 5
+| align="left" | Turbocharger RPM
+|
+|
+|
+| align="left" |
+|-
+| {{mono|75}}
+| {{mono|117}}
+| 7
+| align="left" | Turbocharger temperature
+|
+|
+|
+| align="left" |
+|-
+| {{mono|76}}
+| {{mono|118}}
+| 7
+| align="left" | Turbocharger temperature
+|
+|
+|
+| align="left" |
+|-
+| {{mono|77}}
+| {{mono|119}}
+| 5
+| align="left" | Charge air cooler temperature (CACT)
+|
+|
+|
+| align="left" |
+|-
+| {{mono|78}}
+| {{mono|120}}
+| 9
+| align="left" | Exhaust Gas temperature (EGT) Bank 1
+|
+|
+|
+| align="left" | Special PID. [[#Service 01 PID 78|See below]]
+|-
+| {{mono|79}}
+| {{mono|121}}
+| 9
+| align="left" | Exhaust Gas temperature (EGT) Bank 2
+|
+|
+|
+| align="left" | Special PID. [[#Service 01 PID 78|See below]]
+|-
+| {{mono|7A}}
+| {{mono|122}}
+| 7
+| align="left" | Diesel particulate filter (DPF)
+differential pressure
+|
+|
+|
+| align="left" |
+|-
+| {{mono|7B}}
+| {{mono|123}}
+| 7
+| align="left" | Diesel particulate filter (DPF)
+|
+|
+|
+| align="left" |
+|-
+| {{mono|7C}}
+| {{mono|124}}
+| 9
+| align="left" | Diesel Particulate filter (DPF) temperature
+|
+|
+| °C
+| align="left" |<math>\frac{256 A + B}{10} - 40</math>
+|-
+| {{mono|7D}}
+| {{mono|125}}
+| 1
+| align="left" | NOx NTE ([[Not-To-Exceed]]) control area status
+|
+|
+|
+| align="left" |
+|-
+| {{mono|7E}}
+| {{mono|126}}
+| 1
+| align="left" | PM NTE ([[Not-To-Exceed]]) control area status
+|
+|
+|
+| align="left" |
+|-
+| {{mono|7F}}
+| {{mono|127}}
+| 13
+| align="left" | Engine run time {{efn|Starting with MY 2010 the [[California Air Resources Board]] mandated that all diesel vehicles must supply total engine hours <ref name="finalregorder2">{{cite web |url=https://www.arb.ca.gov/regact/2015/obdii2015/finalregorder2.pdf |title=Final Regulation Order |publisher=California Air Resources Board |location=US |year=2015 |access-date=4 September 2021}}</ref>}}
+|
+|
+| s
+| align="left" |<math>B(2^{24}) + C(2^{16}) + D(2^{8}) + E</math>
+|-
+| {{mono|80}}
+| {{mono|128}}
+| 4
+| align="left" | PIDs supported [$81 - $A0]
+|
+|
+|
+| align="left" | Bit encoded [A7..D0] == [PID $81..PID $A0] [[#Service 01 PID 00|See below]]
+|-
+| {{mono|81}}
+| {{mono|129}}
+| 41
+| align="left" | Engine run time for Auxiliary Emissions Control Device(AECD)
+|
+|
+|
+| align="left" |
+|-
+| {{mono|82}}
+| {{mono|130}}
+| 41
+| align="left" | Engine run time for Auxiliary Emissions Control Device(AECD)
+|
+|
+|
+| align="left" |
+|-
+| {{mono|83}}
+| {{mono|131}}
+| 9
+| align="left" | NOx sensor
+|
+|
+|
+| align="left" |
+|-
+| {{mono|84}}
+| {{mono|132}}
+|1
+| align="left" | Manifold surface temperature
+|
+|
+|
+| align="left" |
+|-
+| {{mono|85}}
+| {{mono|133}}
+|10
+| align="left" | NOx reagent system
+|
+|
+|%
+| align="left" |<math>\tfrac{100}{255} F</math>
+|-
+| {{mono|86}}
+| {{mono|134}}
+|5
+| align="left" | Particulate matter (PM) sensor
+|
+|
+|
+| align="left" |
+|-
+| {{mono|87}}
+| {{mono|135}}
+|5
+| align="left" | Intake manifold absolute pressure
+|
+|
+|
+| align="left" |
+|-
+|{{mono|88}}
+|{{mono|136}}
+|13
+| align="left" |SCR Induce System
+|
+|
+|
+|
+|-
+|{{mono|89}}
+|{{mono|137}}
+|41
+| align="left" |Run Time for AECD #11-#15
+|
+|
+|
+|
+|-
+|{{mono|8A}}
+|{{mono|138}}
+|41
+| align="left" |Run Time for AECD #16-#20
+|
+|
+|
+|
+|-
+|{{mono|8B}}
+|{{mono|139}}
+|7
+| align="left" |Diesel Aftertreatment
+|
+|
+|
+|
+|-
+|{{mono|8C}}
+|{{mono|140}}
+|17
+| align="left" |O2 Sensor (Wide Range)
+|
+|
+|
+|
+|-
+|{{mono|8D}}
+|{{mono|141}}
+|1
+| align="left" |Throttle Position G
+|0
+|100
+|%
+|
+|-
+|{{mono|8E}}
+|{{mono|142}}
+|1
+| align="left" |Engine Friction - Percent Torque
+| -125
+|130
+|%
+| align="left" | <math>A - 125</math>
+|-
+|{{mono|8F}}
+|{{mono|143}}
+|7
+| align="left" |PM Sensor Bank 1 & 2
+|
+|
+|
+|
+|-
+|{{mono|90}}
+|{{mono|144}}
+|3
+| align="left" |WWH-OBD Vehicle OBD System Information
+|
+|
+|h
+|
+|-
+|{{mono|91}}
+|{{mono|145}}
+|5
+| align="left" |WWH-OBD Vehicle OBD System Information
+|
+|
+|h
+|
+|-
+|{{mono|92}}
+|{{mono|146}}
+|2
+| align="left" |Fuel System Control
+|
+|
+|
+|
+|-
+|{{mono|93}}
+|{{mono|147}}
+|3
+| align="left" |WWH-OBD Vehicle OBD Counters support
+|
+|
+|h
+|
+|-
+|{{mono|94}}
+|{{mono|148}}
+|12
+| align="left" |NOx Warning And Inducement System
+|
+|
+|
+|
+|-
+|{{mono|98}}
+|{{mono|152}}
+|9
+| align="left" |Exhaust Gas Temperature Sensor
+|
+|
+|
+|
+|-
+|{{mono|99}}
+|{{mono|153}}
+|9
+| align="left" |Exhaust Gas Temperature Sensor
+|
+|
+|
+|
+|-
+|{{mono|9A}}
+|{{mono|154}}
+|6
+| align="left" |Hybrid/EV Vehicle System Data, Battery, Voltage
+|
+|
+|
+|
+|-
+|{{mono|9B}}
+|{{mono|155}}
+|4
+| align="left" |Diesel Exhaust Fluid Sensor Data
+|
+|
+|%
+|<math>\tfrac{100}{255} D</math>
+|-
+|{{mono|9C}}
+|{{mono|156}}
+|17
+| align="left" |O2 Sensor Data
+|
+|
+|
+|
+|-
+|{{mono|9D}}
+|{{mono|157}}
+|4
+| align="left" |Engine Fuel Rate
+|
+|
+|g/s
+|
+|-
+|{{mono|9E}}
+|{{mono|158}}
+|2
+| align="left" |Engine Exhaust Flow Rate
+|
+|
+|kg/h
+|
+|-
+|{{mono|9F}}
+|{{mono|159}}
+|9
+| align="left" |Fuel System Percentage Use
+|
+|
+|
+|
+|-
+| {{mono|A0}}
+| {{mono|160}}
+| 4
+| align="left" | PIDs supported [$A1 - $C0]
+|
+|
+|
+| align="left" | Bit encoded [A7..D0] == [PID $A1..PID $C0] [[#Service 01 PID 00|See below]]
+|-
+|{{mono|A1}}
+|{{mono|161}}
+|9
+| align="left" |NOx Sensor Corrected Data
+|
+|
+|ppm
+|
+|-
+|{{mono|A2}}
+|{{mono|162}}
+|2
+| align="left" |Cylinder Fuel Rate
+|0
+|2047.96875
+|mg/stroke
+|<math> \frac{256 A + B}{32}</math>
+|-
+|{{mono|A3}}
+|{{mono|163}}
+|9
+| align="left" |Evap System Vapor Pressure
+|
+|
+|Pa
+|
+|-
+|{{mono|A4}}
+|{{mono|164}}
+|4
+| align="left" |Transmission Actual Gear
+|0
+|65.535
+|ratio
+|[A1]==Supported
+<math> \frac{256C+D}{1000}</math>
+|-
+|{{mono|A5}}
+|{{mono|165}}
+|4
+| align="left" |Commanded Diesel Exhaust Fluid Dosing
+|0
+|127.5
+|%
+|[A0]= 1:Supported; 0:Unsupported
+<math> \frac{B}{2}</math> 
+|-
+|{{mono|A6}}
+|{{mono|166}}
+|4
+| align="left" |[[Odometer]] {{efn|Starting with MY 2019 the [[California Air Resources Board]] mandated that all vehicles must supply odometer<ref name="finalregorder2"/>}}
+| 0
+| {{formatnum:429496729.5}}
+| [[Kilometre|km]]
+|  <math>\frac{A(2^{24}) + B(2^{16}) + C(2^{8}) + D}{10}</math>
+|-
+|{{mono|A7}}
+|{{mono|167}}
+|4
+| align="left" | NOx Sensor Concentration Sensors 3 and 4
+|
+|
+|
+|
+|-
+|{{mono|A8}}
+|{{mono|168}}
+|4
+| align="left" | NOx Sensor Corrected Concentration Sensors 3 and 4
+|
+|
+|
+|
+|-
+|{{mono|A9}}
+|{{mono|169}}
+|4
+| align="left" | ABS Disable Switch State
+|
+|
+|
+|[A0]= 1:Supported; 0:Unsupported 
+[B0]= 1:Yes;0:No
+|-
+| {{mono|C0}}
+| {{mono|192}}
+| 4
+| align="left" | PIDs supported [$C1 - $E0]
+|
+|
+|
+| align="left" | Bit encoded [A7..D0] == [PID $C1..PID $E0] [[#Service 01 PID 00|See below]]
+|-
+| {{mono|C3}}
+| {{mono|195}}
+| 2
+| align="left" | Fuel Level Input A/B
+| 0
+| 25,700
+| %
+| align="left" | Returns numerous data, including Drive Condition ID and Engine Speed*
+|-
+| {{mono|C4}}
+| {{mono|196}}
+| 8
+| align="left" | Exhaust Particulate Control System Diagnostic Time/Count
+| 0
+| 4,294,967,295
+| seconds / Count
+| align="left" | B5 is Engine Idle Request<BR>B6 is Engine Stop Request*<BR>First byte = Time in seconds<BR>Second byte = Count
+|-
+| {{mono|C5}}
+| {{mono|197}}
+| 4
+| align="left" | Fuel Pressure A and B
+| 0
+| 5,177
+| kPa
+| align="left" | 
+|-
+| {{mono|C6}}
+| {{mono|198}}
+| 7
+| align="left" | Byte 1 - Particulate control - driver inducement system status<BR>Byte 2,3 - Removal or block of the particulate aftertreatment system counter<BR>Byte 4,5 - Liquid regent injection system (e.g. fuel-borne catalyst) failure counter<BR>Byte 6,7 - Malfunction of Particulate control monitoring system counter
+| 0
+| 65,535
+| h
+| align="left" | 
+|-
+| {{mono|C7}}
+| {{mono|199}}
+| 2
+| align="left" | Distance Since Reflash or Module Replacement
+| 0
+| 65,535
+| km
+| align="left" | 
+|-
+| {{mono|C8}}
+| {{mono|200}}
+| 1
+| align="left" | NOx Control Diagnostic (NCD) and Particulate Control Diagnostic (PCD) Warning Lamp status
+| -
+| -
+| Bit
+| align="left" | 
+|-
+! PID<BR>(hex)
+! PID<BR>(Dec)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula}}
+|}
+
+=== Service {{mono|02}} - Show freeze frame data<span class="anchor" id="Service 02"></span> ===
+Service {{mono|02}} accepts the same PIDs as service {{mono|01}}, with the same meaning,<ref>{{cite web |url=https://bads.lt/en/obd2-codes-and-meanings-2/ |title=OBD2 Codes and Meanings |publisher=Baltic Automotive Diagnostic Systems |location=Lithuania |access-date=11 June 2020}}</ref> but information given is from when the freeze frame<ref>{{Cite web|url=https://www.obdadvisor.com/freeze-frame/|title=OBD2 Freeze Frame Data: What is It? How To Read It?|date=2018-02-28|website=OBD Advisor|language=en-US|access-date=2020-03-14}}</ref> was created. Note that PID {{mono|$02}} is used to obtain the DTC that triggered the freeze frame.
+
+A person has to send the frame number in the data section of the message.
+
+=== Service {{mono|03}} - Show stored Diagnostic Trouble Codes (DTCs)<span class="anchor" id="Service 03"></span> ===
+{| class="wikitable" style="text-align: center"
+! PID<BR>(hex)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula}}
+|-
+| N/A
+| n*6
+| align=left | Request trouble codes
+|
+|
+|
+| align=left | 3 codes per message frame. [[#Service 03 (no PID required)|See below]]
+|}
+
+=== Service {{mono|04}} - Clear Diagnostic Trouble Codes and stored values<span class="anchor" id="Service 04"></span> ===
+{| class="wikitable" style="text-align: center"
+! PID<BR>(hex)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula}}
+|-
+| N/A
+| 0
+| align=left | Clear trouble codes / Malfunction indicator lamp (MIL) / Check engine light
+|
+|
+|
+| align=left | Clears all stored trouble codes and turns the MIL off.
+|}
+
+=== Service {{mono|05}} - Test results, oxygen sensor monitoring (non CAN only)<span class="anchor" id="Service 05"></span> ===
+{| class="wikitable" style="text-align: center"
+! PID<BR>(hex)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula}}
+|-
+| {{mono|0100}}
+| 4
+| align=left | OBD Monitor IDs supported ($01 – $20)
+| 0x0
+| 0xffffffff
+|
+| align=left |
+|-
+| {{mono|0101}}
+| 2
+| align=left | O2 Sensor Monitor Bank 1 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0102}}
+|
+| align=left | O2 Sensor Monitor Bank 1 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0103}}
+|
+| align=left | O2 Sensor Monitor Bank 1 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0104}}
+|
+| align=left | O2 Sensor Monitor Bank 1 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0105}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0106}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0107}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0108}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0109}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|010A}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|010B}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|010C}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|010D}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|010E}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|010F}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0110}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Rich to lean sensor threshold voltage
+|-
+| {{mono|0201}}
+|
+| align=left | O2 Sensor Monitor Bank 1 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0202}}
+|
+| align=left | O2 Sensor Monitor Bank 1 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0203}}
+|
+| align=left | O2 Sensor Monitor Bank 1 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0204}}
+|
+| align=left | O2 Sensor Monitor Bank 1 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0205}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0206}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0207}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0208}}
+|
+| align=left | O2 Sensor Monitor Bank 2 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0209}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|020A}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|020B}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|020C}}
+|
+| align=left | O2 Sensor Monitor Bank 3 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|020D}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 1
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|020E}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 2
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|020F}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 3
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+| {{mono|0210}}
+|
+| align=left | O2 Sensor Monitor Bank 4 Sensor 4
+| 0.00
+| 1.275
+| V
+| align=left | 0.005 Lean to Rich sensor threshold voltage
+|-
+! PID<BR>(hex)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula}}
+|}
+
+=== Service {{mono|09}} - Request vehicle information<span class="anchor" id="Service 09"></span> ===
+{| class="wikitable" style="text-align: center"
+! PID<BR>(hex)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula}}
+|-
+| {{mono|00}}
+| 4
+| align=left | Service 9 supported PIDs ($01 to $20)
+|
+|
+|
+| align=left | Bit encoded. [A7..D0] = [PID $01..PID $20] [[#Service 01 PID 00|See below]]
+|-
+| {{mono|01}}
+| 1
+| align=left | VIN Message Count in PID {{mono|02}}. Only for ISO 9141-2, ISO 14230-4 and SAE J1850.
+|
+|
+|
+| align=left | Usually the value will be 5.
+|-
+| {{mono|02}}
+| 17
+| align=left | [[Vehicle Identification Number]] (VIN)
+|
+|
+|
+| align=left | 17-char VIN, ASCII-encoded and left-padded with null chars ({{mono|0x00}}) if needed to.
+|-
+| {{mono|03}}
+| 1
+| align=left | Calibration ID message count for PID {{mono|04}}. Only for ISO 9141-2, ISO 14230-4 and SAE J1850.
+|
+|
+|
+| align=left | It will be a multiple of 4 (4 messages are needed for each ID).
+|-
+| {{mono|04}}
+| 16,32,48,64..
+| align=left | Calibration ID
+|
+|
+|
+| align=left | Up to 16 ASCII chars. Data bytes not used will be reported as null bytes ({{mono|0x00}}). Several CALID can be output (16 bytes each)
+|-
+| {{mono|05}}
+| 1
+| align=left | Calibration verification numbers (CVN) message count for PID {{mono|06}}. Only for ISO 9141-2, ISO 14230-4 and SAE J1850.
+|
+|
+|
+| align=left |
+|-
+| {{mono|06}}
+| 4,8,12,16
+| align=left | Calibration Verification Numbers (CVN) Several CVN can be output (4 bytes each) the number of CVN and CALID must match
+|
+|
+|
+| align=left | Raw data left-padded with null characters ({{mono|0x00}}). Usually displayed as hex string.
+|-
+| {{mono|07}}
+| 1
+| align=left | In-use performance tracking message count for PID {{mono|08}} and {{mono|0B}}. Only for ISO 9141-2, ISO 14230-4 and SAE J1850.
+| 8
+| 10
+|
+| align=left | 8 if sixteen values are required to be reported, 9 if eighteen values are required to be reported, and 10 if twenty values are required to be reported (one message reports two values, each one consisting in two bytes).
+|-
+| {{mono|08}}
+| 4
+| align=left | In-use performance tracking for spark ignition vehicles
+|
+|
+|
+| align=left | 4 or 5 messages, each one containing 4 bytes (two values). [[#Service 09 PID 08|See below]]
+|-
+| {{mono|09}}
+| 1
+| align=left | ECU name message count for PID {{mono|0A}}
+|
+|
+|
+| align=left |
+|-
+| {{mono|0A}}
+| 20
+| align=left | ECU name
+|
+|
+|
+| align=left | ASCII-coded. Right-padded with null chars ({{mono|0x00}}).
+|-
+| {{mono|0B}}
+| 4
+| align=left | In-use performance tracking for compression ignition vehicles
+|
+|
+|
+| align=left | 5 messages, each one containing 4 bytes (two values). [[#Service 09 PID 0B|See below]]
+|-
+! PID<BR>(hex)
+! Data bytes returned
+! Description
+! Min value
+! Max value
+! Units
+! Formula{{efn|name=formula}}
+|}
+
+{{notelist|close}}
+
+=== Bitwise encoded PIDs ===
+Some of the PIDs in the above table cannot be explained with a simple formula. A more elaborate explanation of these data is provided here:
+
+==== Service 01 PID {{mono|00}} - Show PIDs supported<span class="anchor" id="Service 01 PID 00"></span> ====
+A request for this PID returns 4 bytes of data ([[Big-endian]]). Each bit, from [[Most significant bit|MSB]] to [[Least significant bit|LSB]], represents one of the next 32 PIDs and specifies whether that PID is supported.
+
+For example, if the car response is {{mono|BE1FA813}}, it can be decoded like this:
+
+{| class="wikitable"
+|- align="center"
+! scope="col" | Hexadecimal
+| colspan="4" | {{mono|B}} || colspan="4" | {{mono|E}}
+| colspan="4" | {{mono|1}} || colspan="4" | {{mono|F}}
+| colspan="4" | {{mono|A}} || colspan="4" | {{mono|8}}
+| colspan="4" | {{mono|1}} || colspan="4" | {{mono|3}}
+|- align="center"
+! scope="col" | Binary
+| {{mono|1}} || {{mono|0}} || {{mono|1}} || {{mono|1}} || {{mono|1}} || {{mono|1}} || {{mono|1}} || {{mono|0}}
+| {{mono|0}} || {{mono|0}} || {{mono|0}} || {{mono|1}} || {{mono|1}} || {{mono|1}} || {{mono|1}} || {{mono|1}}
+| {{mono|1}} || {{mono|0}} || {{mono|1}} || {{mono|0}} || {{mono|1}} || {{mono|0}} || {{mono|0}} || {{mono|0}}
+| {{mono|0}} || {{mono|0}} || {{mono|0}} || {{mono|1}} || {{mono|0}} || {{mono|0}} || {{mono|1}} || {{mono|1}}
+|-
+! scope="col" | Supported?
+| {{Yes}} ||  {{No}} || {{Yes}} || {{Yes}} || {{Yes}} || {{Yes}} || {{Yes}} ||  {{No}}
+|  {{No}} ||  {{No}} ||  {{No}} || {{Yes}} || {{Yes}} || {{Yes}} || {{Yes}} || {{Yes}}
+| {{Yes}} ||  {{No}} || {{Yes}} ||  {{No}} || {{Yes}} ||  {{No}} ||  {{No}} ||  {{No}}
+|  {{No}} ||  {{No}} ||  {{No}} || {{Yes}} ||  {{No}} ||  {{No}} || {{Yes}} || {{Yes}}
+|- align="center"
+! scope="col" | PID number
+| {{mono|01}} || {{mono|02}} || {{mono|03}} || {{mono|04}} || {{mono|05}} || {{mono|06}} || {{mono|07}} || {{mono|08}}
+| {{mono|09}} || {{mono|0A}} || {{mono|0B}} || {{mono|0C}} || {{mono|0D}} || {{mono|0E}} || {{mono|0F}} || {{mono|10}}
+| {{mono|11}} || {{mono|12}} || {{mono|13}} || {{mono|14}} || {{mono|15}} || {{mono|16}} || {{mono|17}} || {{mono|18}}
+| {{mono|19}} || {{mono|1A}} || {{mono|1B}} || {{mono|1C}} || {{mono|1D}} || {{mono|1E}} || {{mono|1F}} || {{mono|20}}
+|}
+
+So, supported PIDs are: {{mono|01}}, {{mono|03}}, {{mono|04}}, {{mono|05}}, {{mono|06}}, {{mono|07}}, {{mono|0C}}, {{mono|0D}}, {{mono|0E}}, {{mono|0F}}, {{mono|10}}, {{mono|11}}, {{mono|13}}, {{mono|15}}, {{mono|1C}}, {{mono|1F}} and {{mono|20}}
+
+==== Service 01 PID {{mono|01}} - Monitor status since DTCs cleared<span class="anchor" id="Service 01 PID 01"></span> ====
+A request for this PID returns 4 bytes of data, labeled A, B, C and D.
+
+The first byte (A) contains two pieces of information. Bit {{mono|A7}} ([[Most significant bit|MSB]] of byte A) indicates whether or not the MIL (malfunction indicator light, aka. [[check engine light]]) is illuminated. Bits {{mono|A6}} through {{mono|A0}} represent the number of diagnostic trouble codes currently flagged in the ECU.
+
+The second, third, and fourth bytes (B, C and D) give information about the availability and completeness of certain on-board tests ("OBD readiness checks"). The third and fourth bytes are to be interpreted differently depending upon whether the engine is [[spark plug|spark]] [[ignition system|ignition]] (e.g. Otto or Wankel engines) or [[Diesel engine|compression ignition]] (e.g. Diesel engines). In the second byte (B), bit {{mono|3}} indicates the engine type and thus how to interpret bytes C and D, with {{mono|0}} being spark (Otto or Wankel) and {{mono|1}} (set) being compression (Diesel). Bits {{mono|B6}} to {{mono|B4}} and {{mono|B2}} to {{mono|B0}} are used for information about tests that not engine-type specific, and thus termed ''common'' tests. Note that for bits indicating test '''availability''' a bit set to {{mono|1}} indicates available, whilst for bits indicating test '''completeness''' a bit set to {{mono|0}} indicates complete.
+
+{| class="wikitable"
+! Bits
+! Definition
+|-
+| {{mono|A7}}
+| State of the CEL/MIL (on/off).
+|-
+| {{mono|A6}}-{{mono|A0}}
+| Number of confirmed emissions-related DTCs available for display.
+|-
+| {{mono|B7}}
+| Reserved (should be {{mono|0}})
+|-
+| {{mono|B6}}-{{mono|B4}}
+| Bitmap indicating completeness of ''common'' tests.
+|-
+| {{mono|B3}}
+| Indication of engine type<br/>{{mono|0}} = Spark ignition (e.g. Otto or Wankel engines)<br/> {{mono|1}} = Compression ignition  (e.g. Diesel engines)
+|-
+| {{mono|B2}}-{{mono|B0}}
+| Bitmap indicating availability of ''common'' tests.
+|-
+| {{mono|C7}}-{{mono|C0}}
+| Bitmap indicating availability of engine-type specific tests.
+|-
+| {{mono|D7}}-{{mono|D0}}
+| Bitmap indicating completeness of engine-type specific tests.
+|}
+
+Bits from byte B representing ''common'' test indicators (those not engine-type specific) are mapped as follows:
+
+{| class="wikitable"
+! !! Test availability !! Test completeness
+|- align="center"
+! scope="row" | Components
+| {{mono|B2}} || {{mono|B6}}
+|- align="center"
+! scope="row" | Fuel System
+| {{mono|B1}} || {{mono|B5}}
+|- align="center"
+! scope="row" | Misfire
+| {{mono|B0}} || {{mono|B4}}
+|}
+
+Bytes C and D are mapped as follows for spark ignition engine types (e.g. Otto or Wankel engines):
+
+{| class="wikitable"
+! !! Test availability !! Test completeness
+|- align="center"
+! scope="row" | EGR and/or VVT System
+| {{mono|C7}}|| {{mono|D7}}
+|- align="center"
+! scope="row" | Oxygen Sensor Heater
+| {{mono|C6}} || {{mono|D6}}
+|- align="center"
+! scope="row" | Oxygen Sensor
+| {{mono|C5}}|| {{mono|D5}}
+|- align="center"
+! scope="row" | Gasoline Particulate Filter{{efn|A common misconception is that C4/D4 was A/C Refrigerant,<ref>{{cite book |title=Self-Study Program 942600: Advanced Engine Performance Diagnosis |date=1996 |publisher=Audi of America |page=53 |url=https://www.vaglinks.com/docs/ssp/VWUSA.COM_SSP_942600_Advanced_Engine_Diagnostics.pdf |access-date=8 May 2026 |quote=And by 1996, OBD-II will also have to monitor these systems: [...] [[Chlorofluorocarbon|CFC]]s - This only applies if vehicle uses CFCs in its air conditioning systems: by 1996, it's highly doubtful any manufacturer will still be using CFCs.}}</ref> however it had been listed as Reserved in J1979 for years, and was recently defined as GPF.}}
+| {{mono|C4}} || {{mono|D4}}
+|- align="center"
+! scope="row" | Secondary Air System
+| {{mono|C3}} || {{mono|D3}}
+|- align="center"
+! scope="row" | Evaporative System
+| {{mono|C2}} || {{mono|D2}}
+|- align="center"
+! scope="row" | Heated Catalyst
+| {{mono|C1}} || {{mono|D1}}
+|- align="center"
+! scope="row" | Catalyst
+| {{mono|C0}} || {{mono|D0}}
+|}
+
+Bytes C and D are alternatively mapped as follows for compression ignition engine types (Diesel engines):
+
+{| class="wikitable"
+! !! Test availability !! Test completeness
+|- align="center"
+! scope="row" | EGR and/or VVT System
+| {{mono|C7}} || {{mono|D7}}
+|- align="center"
+! scope="row" | PM filter monitoring
+| {{mono|C6}} || {{mono|D6}}
+|- align="center"
+! scope="row" | Exhaust Gas Sensor
+| {{mono|C5}} || {{mono|D5}}
+|- align="center"
+! scope="row" | - Reserved -
+| {{mono|C4}} || {{mono|D4}}
+|- align="center"
+! scope="row" | Boost Pressure
+| {{mono|C3}} || {{mono| D3}}
+|- align="center"
+! scope="row" | - Reserved -
+| {{mono|C2}} || {{mono|D2}}
+|- align="center"
+! scope="row" | NOx/SCR Monitor
+| {{mono|C1}} || {{mono|D1}}
+|- align="center"
+! scope="row" | NMHC Catalyst{{efn|NMHC ''may'' stand for Non-Methane HydroCarbons, but J1979 does not enlighten us. The translation would be the ammonia sensor in the SCR catalyst.}}
+| {{mono|C0}} || {{mono|D0}}
+|}
+
+{{notelist|close}}
+
+==== Service 01 PID {{mono|41}} - Monitor status this drive cycle<span class="anchor" id="Service 01 PID 41"></span> ====
+A request for this PID returns 4 bytes of data. The data returned is of an identical form to that returned for PID {{mono|01}}, with one exception - the first byte is always zero.
+
+==== Service 01 PID 78 and 79 - Exhaust Gas temperature (EGT) Bank 1 and Bank 2<span class="anchor" id="Service 01 PID 78"></span> ====
+A request for one of these two PIDs will return 9 bytes of data. PID {{mono|78}} returns data relating to [[Exhaust gas temperature|EGT]] sensors for bank 1, whilst PID {{mono|79}} similarly returns data for bank 2. The first byte is a bit encoded field indicating which EGT sensors are supported for the respective bank.
+
+{| class="wikitable"
+! Bytes !! Description
+|-
+| align="center" | {{mono|A}} || EGT sensor support
+|-
+| align="center" | {{mono|B}}-{{mono|C}} || Temperature read by EGT sensor 1
+|-
+| align="center" | {{mono|D}}-{{mono|E}} || Temperature read by EGT sensor 2
+|-
+| align="center" | {{mono|F}}-{{mono|G}} || Temperature read by EGT sensor 3
+|-
+| align="center" | {{mono|H}}-{{mono|I}} || Temperature read by EGT sensor 4
+|}
+
+The first byte is bit-encoded as follows:
+
+{| class="wikitable"
+! Bits !! Description
+|-
+| align="center" | {{mono|A7}}-{{mono|A4}} || Reserved
+|-
+| align="center" | {{mono|A3}} || EGT sensor 4 supported?
+|-
+| align="center" | {{mono|A2}} || EGT sensor 3 supported?
+|-
+| align="center" | {{mono|A1}} || EGT sensor 2 supported?
+|-
+| align="center" | {{mono|A0}} || EGT sensor 1 supported?
+|}
+
+Bytes B through I provide 16-bit integers indicating the temperatures of the sensors. The temperature values are interpreted in degrees Celsius in the range -40 to 6513.5 (scale 0.1), using the usual <math>(A \times 256 + B) / 10 - 40</math> formula (MSB is A, LSB is B). Only values for which the corresponding sensor is supported are meaningful.
+
+==== Service 03 (no PID required) - Show stored Diagnostic Trouble Codes<span class="anchor" id="Service 03 (no PID required)"></span>====
+A request for this service returns a list of the DTCs that have been set. The list is encapsulated using the [[ISO 15765-2]] protocol.
+
+If there are two or fewer DTCs (up to 4 bytes) then they are returned in an [[ISO-TP]] Single Frame (SF). Three or more DTCs in the list are reported in multiple frames, with the exact count of frames dependent on the communication type and addressing details.
+
+Each trouble code requires 2 bytes to describe. Encoded in these bytes are a category and a number. It is typically shown decoded into a five-character form like "{{mono|U0158}}", where the first character (here 'U') represents the category the DTC belongs to, and the remaining four characters are a hexadecimal representation of the number under that category. The first two bits ({{mono|A7}} and {{mono|A6}}) of the first byte (A) represent the category. The remaining 14 bits represent the number. Of note is that since the second character is formed from only two bits, it can thus only be within the range {{mono|0}}-{{mono|3}}.
+
+{| class="wikitable"
+! Bits
+! Definition
+|-
+| {{mono|A7}}-{{mono|A6}}
+| Category<br />{{mono|00}}: {{mono|'''P'''}} - Powertrain<br />{{mono|01}}: {{mono|'''C'''}} - Chassis<br />{{mono|10}}: {{mono|'''B'''}} - Body<br />{{mono|11}}: {{mono|'''U'''}} - Network{{efn|Whilst this is commonly referred to as the network category, it may originally have been the 'undefined' category, hence the use of the letter 'U' rather than 'N'.}}
+|-
+| {{mono|A5}}-{{mono|B0}}
+| Number (within category)
+|}
+{{notelist|close}}
+
+An example DTC of "{{mono|U0158}}" would be decoded as follows:
+
+{| class="wikitable"
+|- align="center"
+! scope="col" | Bit
+| {{mono|A7}} || {{mono|A6}} || {{mono|A5}} || {{mono|A4}} || {{mono|A3}} || {{mono|A2}} || {{mono|A1}} || {{mono|A0}} || {{mono|B7}} || {{mono|B6}} || {{mono|B5}} || {{mono|B4}} || {{mono|B3}} || {{mono|B2}} || {{mono|B1}} || {{mono|B0}}
+|- align="center"
+! scope="col" | Binary
+| {{mono|1}} || {{mono|1}} || {{mono|0}} || {{mono|0}} || {{mono|0}} || {{mono|0}} || {{mono|0}} || {{mono|1}}
+| {{mono|0}} || {{mono|1}} || {{mono|0}} || {{mono|1}} || {{mono|1}} || {{mono|0}} || {{mono|0}} || {{mono|0}}
+|- align="center"
+! scope="col" | Hexadecimal
+| colspan="4" | {{mono|C}}
+| colspan="4" | {{mono|1}}
+| colspan="4" | {{mono|5}}
+| colspan="4" | {{mono|8}}
+|- align="center"
+! scope="col" | Decoded DTC
+| colspan="2" | {{mono|U}}
+| colspan="2" | {{mono|0}}
+| colspan="4" | {{mono|1}}
+| colspan="4" | {{mono|5}}
+| colspan="4" | {{mono|8}}
+|}
+
+The resulting five-character code, e.g. "{{mono|U0158}}", can be looked up in a table of OBD-II DTCs to get an actual description of what it represents. Of note, whilst some blocks of DTC code ranges have generic meanings that apply to all vehicles and manufacturers, the meanings of others can vary per manufacturer or even model.
+
+It is also worth noting that DTCs may sometimes be encountered in a four-character form, e.g. "{{mono|C158}}", which is simply the plain hexadecimal representation of the two bytes, with proper decoding with respect to the category not having been performed.
+
+==== Service 09 PID 08 - In-use performance tracking for spark ignition engines<span class="anchor" id="Service 09 PID 08"></span> ====
+
+It provides information about track in-use performance for catalyst banks, [[oxygen sensor]] banks, evaporative leak detection systems, [[Exhaust gas recirculation|EGR systems]] and secondary air system.
+
+The numerator for each component or system tracks the number of times that all conditions necessary for a specific monitor to detect a malfunction have been encountered.
+The denominator for each component or system tracks the number of times that the vehicle has been operated in the specified conditions.
+
+The count of data items should be reported at the beginning (the first byte).
+
+All data items of the In-use Performance Tracking record consist of two bytes and are reported in this order (each message contains two items, hence the message length is 4).
+
+{| class="wikitable"
+! Mnemonic !! Description
+|-
+| OBDCOND || OBD Monitoring Conditions Encountered Counts
+|-
+| IGNCNTR || Ignition Counter
+|-
+| CATCOMP1 || Catalyst Monitor Completion Counts Bank 1
+|-
+| CATCOND1 || Catalyst Monitor Conditions Encountered Counts Bank 1
+|-
+| CATCOMP2 || Catalyst Monitor Completion Counts Bank 2
+|-
+| CATCOND2 || Catalyst Monitor Conditions Encountered Counts Bank 2
+|-
+| O2SCOMP1 || O2 Sensor Monitor Completion Counts Bank 1
+|-
+| O2SCOND1 || O2 Sensor Monitor Conditions Encountered Counts Bank 1
+|-
+| O2SCOMP2 || O2 Sensor Monitor Completion Counts Bank 2
+|-
+| O2SCOND2 || O2 Sensor Monitor Conditions Encountered Counts Bank 2
+|-
+| EGRCOMP || EGR Monitor Completion Condition Counts
+|-
+| EGRCOND || EGR Monitor Conditions Encountered Counts
+|-
+| AIRCOMP || AIR Monitor Completion Condition Counts (Secondary Air)
+|-
+| AIRCOND || AIR Monitor Conditions Encountered Counts (Secondary Air)
+|-
+| EVAPCOMP || EVAP Monitor Completion Condition Counts
+|-
+| EVAPCOND || EVAP Monitor Conditions Encountered Counts
+|-
+| SO2SCOMP1 || Secondary O2 Sensor Monitor Completion Counts Bank 1
+|-
+| SO2SCOND1 || Secondary O2 Sensor Monitor Conditions Encountered Counts Bank 1
+|-
+| SO2SCOMP2 || Secondary O2 Sensor Monitor Completion Counts Bank 2
+|-
+| SO2SCOND2 || Secondary O2 Sensor Monitor Conditions Encountered Counts Bank 2
+|}
+
+==== Service 09 PID 0B - In-use performance tracking for compression ignition engines<span class="anchor" id="Service 09 PID 0B"></span> ====
+
+It provides information about track in-use performance for NMHC catalyst, NOx catalyst monitor, [[NOx adsorber]] monitor, PM filter monitor, exhaust gas sensor monitor, EGR/ VVT monitor, boost pressure monitor and fuel system monitor.
+
+All data items consist of two bytes and are reported in this order (each message contains two items, hence message length is 4):
+
+{| class="wikitable"
+! Mnemonic !! Description
+|-
+| OBDCOND || OBD Monitoring Conditions Encountered Counts
+|-
+| IGNCNTR || Ignition Counter
+|-
+| HCCATCOMP || NMHC Catalyst Monitor Completion Condition Counts
+|-
+| HCCATCOND || NMHC Catalyst Monitor Conditions Encountered Counts
+|-
+| NCATCOMP || NOx/SCR Catalyst Monitor Completion Condition Counts
+|-
+| NCATCOND || NOx/SCR Catalyst Monitor Conditions Encountered Counts
+|-
+| NADSCOMP || NOx Adsorber Monitor Completion Condition Counts
+|-
+| NADSCOND || NOx Adsorber Monitor Conditions Encountered Counts
+|-
+| PMCOMP || PM Filter Monitor Completion Condition Counts
+|-
+| PMCOND || PM Filter Monitor Conditions Encountered Counts
+|-
+| EGSCOMP || Exhaust Gas Sensor Monitor Completion Condition Counts
+|-
+| EGSCOND || Exhaust Gas Sensor Monitor Conditions Encountered Counts
+|-
+| EGRCOMP || EGR and/or VVT Monitor Completion Condition Counts
+|-
+| EGRCOND || EGR and/or VVT Monitor Conditions Encountered Counts
+|-
+| BPCOMP || Boost Pressure Monitor Completion Condition Counts
+|-
+| BPCOND || Boost Pressure Monitor Conditions Encountered Counts
+|-
+| FUELCOMP || Fuel Monitor Completion Condition Counts
+|-
+| FUELCOND || Fuel Monitor Conditions Encountered Counts
+|}
+
+=== Enumerated PIDs ===
+Some PIDs are to be interpreted specially, and aren't necessarily exactly bitwise encoded, or in any scale.
+The values for these PIDs are [[Enumerated type|enumerated]].
+
+==== Service 01 PID {{mono|03}} - Fuel system status<span class="anchor" id="Service 01 PID 03"></span> ====
+A request for this PID returns 2 bytes of data. The first byte describes fuel system #1. The second byte describes fuel system #2 (if it exists) and is encoded identically to the first byte. The meaning assigned to the value of each byte is as follows:
+
+{| class="wikitable"
+! Value !! Description
+|-
+| align="center" | 0 || The motor is off
+|-
+| align="center" | 1 || Open loop due to insufficient engine temperature
+|-
+| align="center" | 2 || Closed loop, using oxygen sensor feedback to determine fuel mix
+|-
+| align="center" | 4 || Open loop due to engine load OR fuel cut due to deceleration
+|-
+| align="center" | 8 || Open loop due to system failure
+|-
+| align="center" | 16 || Closed loop, using at least one oxygen sensor but there is a fault in the feedback system
+|}
+
+Any other value is an invalid response.
+
+==== Service 01 PID {{mono|12}} - Commanded secondary air status<span class="anchor" id="Service 01 PID 12"></span> ====
+A request for this PID returns a single byte of data which describes the secondary air status.
+
+{| class="wikitable"
+! Value !! Description
+|-
+| align="center" | 1 || Upstream 
+|-
+| align="center" | 2 || Downstream of catalytic converter
+|-
+| align="center" | 4 || From the outside atmosphere or off
+|-
+| align="center" | 8 || Pump commanded on for diagnostics
+|}
+
+Any other value is an invalid response.
+
+==== Service 01 PID {{mono|1C}} - OBD standards this vehicle conforms to<span class="anchor" id="Service 01 PID 1C"></span> ====
+A request for this PID returns a single byte of data which describes which OBD standards this ECU was designed to comply with. The different values the data byte can hold are shown below, next to what they mean:
+
+{| class="wikitable"
+! Value (dec) !! Description
+|-
+| align="center" | 1 || OBD-II as defined by the [[California Air Resources Board|CARB]]
+|-
+| align="center" | 2 || OBD as defined by the [[United States Environmental Protection Agency|EPA]]
+|-
+| align="center" | 3 || OBD and OBD-II
+|-
+| align="center" | 4 || OBD-I
+|-
+| align="center" | 5 || Not OBD compliant
+|-
+| align="center" | 6 || EOBD (Europe)
+|-
+| align="center" | 7 || EOBD and OBD-II
+|-
+| align="center" | 8 || EOBD and OBD
+|-
+| align="center" | 9 || EOBD, OBD and OBD II
+|-
+| align="center" | 10 || JOBD (Japan)
+|-
+| align="center" | 11 || JOBD and OBD II
+|-
+| align="center" | 12 || JOBD and EOBD
+|-
+| align="center" | 13 || JOBD, EOBD, and OBD II
+|-
+| align="center" | 14 || OBD, EOBD, and KOBD
+|-
+| align="center" | 15 || OBD, OBD II, EOBD, and KOBD
+|-
+| align="center" | 16 || Reserved
+|-
+| align="center" | 17 || Engine Manufacturer Diagnostics (EMD)
+|-
+| align="center" | 18 || Engine Manufacturer Diagnostics Enhanced (EMD+)
+|-
+| align="center" | 19 || Heavy Duty On-Board Diagnostics (Child/Partial) (HD OBD-C)
+|-
+| align="center" | 20 || Heavy Duty On-Board Diagnostics (HD OBD)
+|-
+| align="center" | 21 || World Wide Harmonized OBD (WWH OBD)
+|-
+| align="center" | 22 || Reserved
+|-
+| align="center" | 23 || Heavy Duty Euro OBD Stage I without NOx control (HD EOBD-I)
+|-
+| align="center" | 24 || Heavy Duty Euro OBD Stage I with NOx control (HD EOBD-I N)
+|-
+| align="center" | 25 || Heavy Duty Euro OBD Stage II without NOx control (HD EOBD-II)
+|-
+| align="center" | 26 || Heavy Duty Euro OBD Stage II with NOx control (HD EOBD-II N)
+|-
+| align="center" | 27 || Heavy Duty ZEV
+|-
+| align="center" | 28 || Brazil OBD Phase 1 (OBDBr-1)
+|-
+| align="center" | 29 || Brazil OBD Phase 2 (OBDBr-2)
+|-
+| align="center" | 30 || Korean OBD (KOBD)
+|-
+| align="center" | 31 || India OBD I (IOBD I)
+|-
+| align="center" | 32 || India OBD II (IOBD II)
+|-
+| align="center" | 33 || Heavy Duty Euro OBD Stage VI (HD EOBD-IV)
+|-
+| align="center" | 34 || OBD, OBD-II, and HD OBD
+|-
+| align="center" | 35 || Brazil OBD Phase 3 (OBDBr-3)
+|-
+| align="center" | 53-250 || Reserved
+|-
+| align="center" | 251-255 || Not available for assignment (SAE [[J1939]] special meaning)
+|}
+
+==== Service 01 PID {{mono|51}} - Fuel Type Coding<span class="anchor" id="Fuel Type Coding"></span> ====
+This PID returns a value from an enumerated list giving the fuel type of the vehicle. The fuel type is returned as a single byte, and the value is given by the following table:
+
+{| class="wikitable"
+! Value !! Description
+|-
+| align="center" | 0 || Not available
+|-
+| align="center" | 1 || Gasoline
+|-
+| align="center" | 2 || Methanol
+|-
+| align="center" | 3 || Ethanol
+|-
+| align="center" | 4 || Diesel
+|-
+| align="center" | 5 || [[Liquefied petroleum gas|LPG]]
+|-
+| align="center" | 6 || [[Compressed natural gas|CNG]]
+|-
+| align="center" | 7 || Propane
+|-
+| align="center" | 8 || Electric
+|-
+| align="center" | 9 || [[Bi-fuel vehicle|Bifuel]] running Gasoline
+|-
+| align="center" | 10 || Bifuel running Methanol
+|-
+| align="center" | 11 || Bifuel running Ethanol
+|-
+| align="center" | 12 || Bifuel running LPG
+|-
+| align="center" | 13 || Bifuel running CNG
+|-
+| align="center" | 14 || Bifuel running Propane
+|-
+| align="center" | 15 || Bifuel running Electricity
+|-
+| align="center" | 16 || Bifuel running electric and combustion engine
+|-
+| align="center" | 17 || Hybrid gasoline
+|-
+| align="center" | 18 || Hybrid Ethanol
+|-
+| align="center" | 19 || Hybrid Diesel
+|-
+| align="center" | 20 || Hybrid Electric
+|-
+| align="center" | 21 || Hybrid running electric and combustion engine
+|-
+| align="center" | 22 || Hybrid Regenerative
+|-
+| align="center" | 23 || Bifuel running diesel
+|}
+
+Any other value is reserved by ISO/SAE. There are currently no definitions for [[flexible-fuel vehicle]].
+
+== Non-standard PIDs ==
+The majority of all OBD-II PIDs in use are non-standard. For most modern vehicles, there are many more functions supported on the OBD-II interface than are covered by the standard PIDs, and there is relatively minor overlap between vehicle manufacturers for these non-standard PIDs.
+
+There is very limited information available in the public domain for non-standard PIDs. The primary source of information on non-standard PIDs across different manufacturers is maintained by the US-based [[Equipment and Tool Institute]] and only available to members. The price of ETI membership for access to scan codes varies based on company size defined by annual sales of automotive tools and equipment in North America:
+
+{| class="wikitable"  
+|-
+! Annual Sales in North America !! Annual Dues
+|-
+| Under $10,000,000 || $5,000
+|-
+| $10,000,000 - $50,000,000 || $7,500
+|-
+| Greater than $50,000,000 || $10,000
+|}
+However, even ETI membership will not provide full documentation for non-standard PIDs. ETI states:<ref name=eti-faq>{{cite web
+  | title = ETI Full Membership FAQ
+  | publisher = The Equipment and Tool Institute
+  | url = http://www.etools.org/FullMembershipFAQ
+  | access-date = 29 November 2013
+  | archive-date = 10 March 2017
+  | archive-url = https://web.archive.org/web/20170310110523/http://www.etools.org/FullMembershipFAQ
+  | url-status = dead
+  }}
+ showing cost of access to OBD-II PID documentation</ref><ref>{{cite web |url=http://www.etools.org/OEMLicensing/ |title=Special OEM License Requirements |publisher=The Equipment and Tool Institute |access-date=13 April 2015 |archive-date=3 May 2017 |archive-url=https://web.archive.org/web/20170503171908/http://etools.org/OEMLicensing |url-status=dead }}</ref>
+<blockquote>
+Some OEMs refuse to use ETI as a one-stop source of scan tool information. They prefer to do business with each tool company separately. These companies also require that you enter into a contract with them. The charges vary but here is a snapshot as of April 13th, 2015 of the per year charges:
+{| class="wikitable"  
+|-
+|GM          || $50,000
+|-
+|Honda       || $5,000
+|-
+|Suzuki      || $1,000
+|-
+|BMW         || $25,500 plus $2,000 per update. Updates occur annually.
+|}
+</blockquote>
+
+== CAN (11-bit) bus format ==
+As defined in ISO 15765-4, emissions protocols (including OBD-II, EOBD, UDS, etc.) use the ISO-TP [[transport layer]] (ISO 15765-2). All CAN frames sent using ISO-TP use a data length of 8 bytes (and DLC of 8). It is recommended to pad the unused data bytes with 0xCC.
+
+The PID query and response occurs on the vehicle's CAN bus. Standard OBD requests and responses use functional addresses. The diagnostic reader initiates a query using CAN ID 7DFh, which acts as a [[broadcast address]], and accepts responses from any ID in the range 7E8h to 7EFh. ECUs that can respond to OBD queries listen both to the functional broadcast ID of 7DFh and one assigned ID in the range 7E0h to 7E7h. Their response has an ID of their assigned ID plus 8 e.g. 7E8h through 7EFh.
+
+This approach allows up to eight ECUs, each independently responding to OBD queries. The diagnostic reader can use the ID in the ECU response frame to continue communication with a specific ECU. In particular, multi-frame communication requires a response to the specific ECU ID rather than to ID 7DFh.
+
+CAN bus may also be used for communication beyond the standard OBD messages. Physical addressing uses particular CAN IDs for specific modules (e.g., 720h for the instrument cluster in Fords) with proprietary frame payloads.
+
+=== Query ===
+The functional PID query is sent to the vehicle on the CAN bus at ID 7DFh, using 8 data bytes. The bytes are:
+{| class="wikitable"
+|- 
+! 
+! colspan="8" |Byte
+|-
+! width = 8% | PID Type
+! width=22% | 0 
+! width=22% | 1 
+! width=22% | 2 
+! width=5% | 3 
+! width=5% | 4 
+! width=5% | 5 
+! width=5% | 6 
+! width=5% | 7 
+|-
+| SAE Standard
+| Number of<br>additional<br>data bytes:<br>2
+| Service<br>01 = show current data;<br>02 = freeze frame;<br>etc.
+| PID code<br>(e.g.: 05 = Engine coolant temperature)
+|colspan=5| not used<br>([[ISO 15765-2]] suggests CCh)
+|-
+| Vehicle specific
+| Number of<br>additional<br>data bytes:<br>3
+| Custom service: (e.g.: 22 = enhanced data)
+|colspan=2| PID code<br>(e.g.: 4980h)
+|colspan=4| not used<br>([[ISO 15765-2]] suggests CCh)
+|}
+
+=== Response ===
+The vehicle responds to the PID query on the CAN bus with message IDs that depend on which module responded. Typically the engine or main ECU responds at ID 7E8h. Other modules, like the hybrid controller or battery controller in a Prius, respond at 07E9h, 07EAh, 07EBh, etc. These are 8h higher than the physical address the module responds to. Even though the number of bytes in the returned value is variable, the message uses 8 data bytes regardless ([[CAN bus]] protocol form Frameformat with 8 data bytes).
+The bytes are:
+{| class="wikitable"
+|- 
+! 
+! colspan="8" |Byte
+|-
+! width = 15% | CAN Address
+! width=12% | 0 
+! width=26% | 1 
+! width=21% | 2 
+! width=5% | 3 
+! width=5% | 4 
+! width=5% | 5 
+! width=5% | 6 
+! width=5% | 7 
+|-
+| SAE Standard<br>7E8h, <br>7E9h, <br>7EAh, <br>etc.
+| Number of<br>additional<br>data bytes:<br>3 to 6
+| Custom service<br>Same as query, except that 40h is added to the service value. So:<br>41h = show current data;<br>42h = freeze frame;<br>etc.
+| PID code<br>(e.g.: 05 = Engine coolant temperature)
+| value of the specified parameter, byte 0
+| value, byte 1 (optional)
+| value, byte 2 (optional)
+| value, byte 3 (optional)
+| not used<br>(may be 00h or 55h)
+|-
+| Vehicle specific<br>7E8h, or 8h + physical ID of module.
+| Number of<br>additional<br>data bytes:<br>4to 7
+| Custom service: same as query, except that 40h is added to the service value.(e.g.: 62h = response to service 22h request)
+|colspan=2| PID code<br>(e.g.: 4980h)
+| value of the specified parameter, byte 0
+| value, byte 1 (optional)
+| value, byte 2 (optional)
+| value, byte 3 (optional)
+|-
+| Vehicle specific<br>7E8h, or 8h + physical ID of module.
+| Number of<br>additional<br>data bytes:<br>3
+| 7Fh this a general response usually indicating the module doesn't recognize the request.
+| Custom service: (e.g.: 22h = enhanced diagnostic data by PID, 21h = enhanced data by offset)
+| 31h
+|colspan=4| not used<br>(may be 00h)
+|}
+
+==See also==
+* [[Engine control unit]]
+* [[ELM327]], a very common microcontroller (silicon chip) and multi-protocol interpreter used in OBD-II vehicle communication interfaces
+* [[Unified Diagnostic Services]], the ISO standard
+
+== References ==
+{{reflist|30em}}
+
+==Further reading==
+*{{Cite journal|date=2017-02-16|title=E/E Diagnostic Test Modes|department=Vehicle E E System Diagnostic Standards Committee|journal=SAE J1979|publisher=SAE International|doi=10.4271/J1979_201702}}
+*{{Cite journal|date=2017-02-16|title=Digital Annex of E/E Diagnostic Test Modes|department=Vehicle E E System Diagnostic Standards Committee|journal=SAE J1979-Da|publisher=SAE International|doi=10.4271/J1979DA_201702}}
+*{{cite web |url=https://www.kpit.com/insights/the-lifecycle-of-a-diagnostic-trouble-code-dtc/ |title=The Lifecycle of a Diagnostic Trouble Code (DTC) |first=Bernhard |last=Wagner |location=Germany |website=KPIT |access-date=2020-08-29}}
+
+[[Category:Technology-related lists|OBD-II Codes]]
+[[Category:Automotive technologies|On Board Diagnostics]]
+[[Category:Electronics lists]]

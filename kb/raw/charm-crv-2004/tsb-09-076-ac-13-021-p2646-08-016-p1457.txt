@@ -1,0 +1,468 @@
+Source: Operation CHARM service manual, 2004 Honda CR-V 4WD L4-2.4L — https://charm.li/Honda%20Truck/2004/CR-V%204WD%20L4-2.4L/Repair%20and%20Diagnosis/ (section paths in ===== headers). Retrieved 2026-11-07.
+===== Technical%20Service%20Bulletins/All%20Technical%20Service%20Bulletins/A%2FC%20-%20System%20is%20Inoperative/ 
+ 
+A/C - System is Inoperative 09-076
+October 14, 2010
+Applies To: 
+2002-04 CR-V - ALL
+A/C System Does Not Work
+(Supersedes 09-076, dated July 23 2010; see REVISION SUMMARY)
+REVISION SUMMARY
+The DIAGNOSIS and REPAIR PROCEDURE sections were revised. American Honda recommends that you review these sections thoroughly.
+SYMPTOM
+The A/C system does not work.
+PROBABLE CAUSE
+The A/C compressor failed.
+CORRECTIVE ACTION
+Inspect the A/C compressor, the A/C compressor clutch, coil, and all other A/C system parts. Replace any parts that are internally contaminated or fails the service manual test.
+[img /images/IMP02Q313/asian150/376486751/] 
+[img /images/IMP02Q313/asian150/376494350/] 
+PARTS INFORMATION
+TOOL INFORMATION
+A/C Compressor Kit: 07MF-000A150
+WARRANTY CLAIM INFORMATION
+[img /images/IMP02Q313/asian150/376498010/] 
+The normal warranty applies.
+Failed Part: P/N 38810-PNB-006
+Defect Code: 08103
+Symptom Code: 03214
+Skill Level: Repair Technician
+DIAGNOSIS
+ NOTE :
+ This procedure is in an outline form that you can also use as a checklist for the diagnosis/repair. If you need more details, bookmark the following procedures in the 2002-2004 OH-V Service Manual, or view them online:
+^ Refrigerant Recovery/Recharging
+^ Battery Disconnection/Reconnection
+^ Front Bumper Removal
+^ Radiator Reservoir Removal
+^ A/C Compressor Clutch Check
+^ A/C Compressor Clutch Overhaul
+^ Drive Belt Replacement
+^ Auto-Tensioner Replacement
+^ A/C Condenser Replacement
+^ ECM/PCM Removal/Installation
+1. If the A/C compressor is operable, run the engine at idle speed , and let the A/C work for a few minutes, then shut the engine off.
+2. Make sure you have the anti-theft codes for the audio system and the navigation system (if equipped), then write down the audio presets.
+3. Make sure the ignition switch is in LOCK (0), then disconnect the negative cable from the battery.
+4. Recover the refrigerant with a recovery/recycling/ charging station.
+5. Remove the nut, then remove the discharge line from the A/C compressor. Swab the inside of the hose passage on the discharge port of the A/C compressor:
+ ^ If you find metal particles or any gray or black residue, the A/C compressor must be replaced. Continue with step 6.
+[img /images/IMP02Q313/asian150/376500346/] 
+ ^ If you do not find any metal particles or any gray or black residue, this service bulletin does not apply. Reinstall the discharge hose using a new 0-ring, then continue with normal troubleshooting.
+6. Remove the nut, then remove the suction hose from the compressor. Swab the inside of the hose passage on the suction port of the compressor:
+ ^ If you find any metal particles, or any dark gray or black residue, the entire NC system is contaminated. All A/C components must be replaced. Go to REPAIR PROCEDURE C.
+[img /images/IMP02Q313/asian150/376640488/] 
+ ^ If the suction port is clean or has a light gray residue, other components may be contaminated, go to step 7.
+7. Remove the radiator reservoir.
+8. Remove the drive belt .
+9. Remove the auto-tensioner.
+[img /images/IMP02Q313/asian150/376801783/] 
+10. Disconnect the alternator connector and the BLK wire, then remove the harness clip from the alternator.
+[img /images/IMP02Q313/asian150/376918029/] 
+11. Remove the alternator (three bolts).
+[img /images/IMP02Q313/asian150/377028344/] 
+12. Remove the front bumper.
+[img /images/IMP02Q313/asian150/377199346/] 
+13. Remove the discharge hose bolt, then disconnect the discharge hose from the condenser.
+14. Swab the inside of the discharge line and the condenser passage.
+ ^ If you find any metal particles or other debris, the condenser and discharge line must be replaced. Go to step 15.
+[img /images/IMP02Q313/asian150/377338851/] 
+ ^ If no metal particles or debris is found, go to step 16.
+15. Remove the cap with 0-rings, the filter, and the desiccant bag from the receiver dryer.
+ ^ If the desiccant bag is clean or slightly contaminated, go to REPAIR PROCEDURE B.
+[img /images/IMP02Q313/asian150/377475275/] 
+ ^ If the desiccant bag is heavily contaminated, go to REPAIR PROCEDURE C.
+16. Remove the cap with 0-rings, the filter, and the desiccant bag from the receiver dryer.
+ ^ If the desiccant bag is clean, go to REPAIR PROCEDURE A.
+ ^ If the desiccant bag is slightly contaminated, go to REPARE PROCEDURE B.
+REPAIR PROCEDURE A (A/C SERVICE KIT A)
+[img /images/IMP02Q313/asian150/377640395/] 
+1. Disconnect the connector, then remove the A/C compressor (four bolts). Be careful not to damage the radiator fins.
+2. Check the A/C compressor clutch as described in the service manual.
+3. If the clutch and the coil test good, remove and install them on the new compressor, or install a new clutch and coil if needed.
+4. Adjust the amount of refrigerant oil in the new A/C compressor.
+ NOTE :
+ The new compressor comes with 130 mL of SP-10 PAG oil. Calculate the amount of oil to be drained from the new compressor for desiccant/ filter and compressor replacement.
+ Compressor: Drain the PAG oil from the failed A/C compressor into an appropriate container and record the amount in mL. Subtract the volume of oil drained from the failed compressor from 130 mL (5-1/3 fl.oz.), and drain the calculated volume of oil from the new compressor: 130 mL (5-1/3 fl.oz.) - Volume of oil removed compressor = Volume to drain from new compressor.
+ NOTE : 
+ Even if no oil is drained from the failed compressor, don't drain more than 50 mL (1-2/3 fl.oz.) from the new compressor.
+[img /images/IMP02Q313/asian150/377756348/] 
+ Example:
+[img /images/IMP02Q313/asian150/377831261/] 
+ When replacing the desiccant and filter, the amount of oil drained from the new compressor needs to be reduced by 10 mL.
+5. Install the new compressor, then torque its mounting bolts to 22 N.m (16 lb-ft). Connect the discharge line, the suction line, and the condenser line with new 0-rings, then torque the line nut and the bolts to 9.8 N.m (7.2 lb-ft). Reconnect the compressor clutch connector.
+[img /images/IMP02Q313/asian150/377901440/] 
+ NOTE :
+ Apply a thin coat of refrigerant oil to the 0-rings before installation.
+6. Remove the bolts and mounting brackets, then remove the condenser by lifting it up. Be careful not to damage the radiator fins when removing the old condenser.
+7. Install a new desiccant bag, a new filter, and new 0-rings in the receiver dryer.
+[img /images/IMP02Q313/asian150/378083616/] 
+ NOTE : 
+ Apply a thin coat of refrigerant oil to the 0-rings before installation.
+8. Reinstall the A/C condenser and the upper mounting brackets, and torque the bolts to 9.8 N.m (7.2 lb-ft).
+9. Reconnect the discharge line and the condenser line with new 0-rings, then torque the bolts to 9.8 N.m (7.2 lb-ft).
+10. Reinstall the alternator.
+11. Reinstall the drive belt .
+12. Reinstall the auto-tensioner.
+13. Reinstall the front bumper, and replace any damaged mounting clips.
+14. Reconnect the battery cables to the battery, then do the battery reconnection procedure.
+15. Recharge the A/C system with a recovery/ recycling/recharge station. Recharging includes these steps:
+ ^ Evacuate the system.
+ ^ Charge the system with the specified amount of R-134a refrigerant . Do not overcharge the system.
+ ^ Check for refrigerant leaks.
+ ^ Check the A/C performance.
+ ^ Do the ECM/PCM idle learn procedure.
+ ^ Do the power window control unit reset procedure.
+ ^ Enter the anti-theft codes for the audio system, then enter the customer's audio system presets.
+REPAIR PROCEDURE B (A/C SERVICE KIT B)
+[img /images/IMP02Q313/asian150/378170636/] 
+1. Disconnect the connector, then remove the A/C compressor (four bolts). Be careful not to damage the radiator fins.
+2. Check the NC compressor clutch as described in the service manual.
+3. If the clutch and the coil test good, remove and install them on the new compressor, or install a new clutch and coil if needed.
+4. Adjust the amount of refrigerant oil in the new A/C compressor.
+ NOTE : 
+ The new compressor comes with 130 mL of SP-10 PAG oil. Calculate the amount of oil to be drained from the new compressor for the discharge hose, the condenser, the desiccant/filter and the compressor replacement.
+ Compressor: Drain the PAG oil from the failed A/C compressor into an appropriate container and record the amount in mL. Subtract the volume of oil drained from the failed compressor from 130 mL (5-1/3 fl.oz.), and drain the calculated volume of oil from the new compressor: 130 mL (5-1/3 fl.oz.) - Volume of oil removed compressor = Volume to drain from new compressor.
+ NOTE : 
+ Even if no oil is drained from the failed compressor, don't drain more than 50 mL (1-2/3 fl.oz.) from the new compressor.
+[img /images/IMP02Q313/asian150/378083616/] 
+ Example:
+[img /images/IMP02Q313/asian150/378281404/] 
+ When replacing the discharge hose, condenser, and desiccant/filter, the amount of oil drained from the new compressor needs to be reduced by 45 mL.
+5. Install the new compressor, then torque its mounting bolts to 22 N.m (16 lb-ft). Connect the discharge line, the suction line, and the condenser line with new 0-rings, then torque the line nut and the bolts to 9.8 N.m (7.2 lb-ft). Reconnect the compressor clutch connector.
+[img /images/IMP02Q313/asian150/378375166/] 
+ NOTE :
+ Apply a thin coat of refrigerant oil to the 0-rings before installation.
+6. Remove the bolts and mounting brackets, then remove the condenser by lifting it up. Be careful not to damage the radiator fins when removing the old condenser.
+[img /images/IMP02Q313/asian150/378558320/] 
+7. Install the new condenser, new desiccant bag, a new filter, and new 0-rings in the receiver dryer.
+ NOTE :
+ Apply a thin coat of refrigerant oil to the 0-rings before installation.
+8. Install the new condenser, new discharge line, and the original condenser line with new 0-rings, then torque the bolts to 9.8 N.m (7.2 lb-ft).
+9. Reinstall the A/C condenser and the upper mounting brackets, and torque the bolts to 9.8 N.m (7.2 lb-ft).
+10. Reinstall the alternator.
+11. Reinstall the drive belt .
+12. Reinstall the auto-tensioner.
+13. Reinstall the front bumper, and replace any damaged mounting clips.
+14. Reconnect the battery cables to the battery, then do the battery reconnection procedure.
+15. Recharge the A/C system with a recovery/ recycling/recharge station. Recharging includes these steps:
+ ^ Evacuate the system.
+ ^ Charge the system with the specified amount of R-134a refrigerant . Do not overcharge the system.
+ ^ Check for refrigerant leaks.
+ ^ Check the A/C performance.
+ ^ Do the ECM/PCM idle learn procedure.
+ ^ Do the power window control unit reset procedure.
+ ^ Enter the anti-theft codes for the audio system, then enter the customer's audio system presets.
+REPAIR PROCEDURE C (A/C SERVICE KIT C)
+[img /images/IMP02Q313/asian150/378638883/] 
+1. Disconnect the connector, then remove the A/C compressor (four bolts). Be careful not to damage the radiator fins.
+2. Check the A/C compressor clutch as described in the service manual.
+3. If the clutch and the coil test good, remove and install them on the new compressor, or install a new clutch and coil if needed.
+[img /images/IMP02Q313/asian150/378753946/] 
+4. Disconnect the receiver line from the condenser.
+[img /images/IMP02Q313/asian150/378926012/] 
+5. Remove the bolts and mounting brackets, then remove the condenser by lifting it up. Be careful not to damage the radiator fins when removing the condenser.
+6. Remove the suction hose, the discharge hose, the A/C line, receiver line A, and receiver line B.
+[img /images/IMP02Q313/asian150/379059421/] 
+7. Remove the line bolt, then disconnect the suction line and the receiver line from the evaporator core.
+8. Remove the passenger's dashboard undercover. Pull down on the front edge to release the clips. Pull the cover away to release the pins from the holders.
+9. Remove the right kick panel and the glove box.
+[img /images/IMP02Q313/asian150/379196676/] 
+10. Cut the plastic cross brace in the glove box opening with diagonal cutters in the areas shown. Remove and discard the plastic cross brace.
+[img /images/IMP02Q313/asian150/379322988/] 
+11. Remove the relays, then remove the bolts and the glove box frame.
+12. Remove the ECM/PCM.
+[img /images/IMP02Q313/asian150/379409559/] 
+13. Disconnect the connectors from the blower motor, the power transistor, and the recirculation control motor, then remove the wire harness clips.
+[img /images/IMP02Q313/asian150/379575128/] 
+14. Fold the carpet and the pad back toward you. Remove the mounting bolts, the mounting nuts, and the blower unit.
+[img /images/IMP02Q313/asian150/379713726/] 
+15. Remove the bolt and the ECM/PCM bracket. Remove the self-tapping screws and the expansion valve cover.
+[img /images/IMP02Q313/asian150/379839685/] 
+16. Carefully pull out the evaporator.
+17. Remove the bolts from the expansion valve.
+18. Install the new expansion valve and new 0-rings on the new evaporator, then torque the bolts to 9.8 N.m (7.2 lb-ft).
+19. Install a new evaporator, then reinstall the ECM/PCM bracket and the expansion valve cover.
+20. Reinstall the blower unit.
+21. Reinstall the ECM/PCM.
+22. Reinstall the dashboard undercover.
+23. Reinstall the relays.
+24. Reinstall the kick panel and the glove box.
+25. Install a new suction line and a new receiver line. 
+ Torque the line nuts to 9.8 N.m (7.2 lb-ft).
+26. Install a new desiccant bag, a new condenser, a new condenser line, a new discharge hose, and new 0-rings. Torque the condenser bracket bolts to 9.8 N.m (7.2 lb-ft). Torque the condenser discharge lines to 9.8 N.m (7.2 lb-ft).
+ NOTE :
+ Apply a thin coat of refrigerant oil to the 0-rings before installation.
+27. Install a new receiver line A and a new receiver line B.
+28. Install a new clutch and coil (if needed) or the original to a new A/C compressor. Install the compressor, then torque the bolts to 22 N.m (16 lb-ft).
+29. Install a new suction hose and a new discharge hose with new 0-rings to the compressor, and torque the line nuts to 9.8 N.m (7.2 lb-ft)
+30. Reinstall the alternator, and torque its mounting bolts to 22 N.m (16 lb-ft).
+31. Reinstall the auto-tensioner.
+32. Reinstall the drive belt .
+33. Reinstall the radiator.
+34. Reinstall the front bumper.
+35. Reconnect the battery.
+36. Recharge the A/C system with a recovery/ recycling/recharge station. Recharging includes these steps:
+ ^ Evacuate the system.
+ ^ Charge the system with the specified amount of R-134a refrigerant . Do not overcharge the system.
+ ^ Check for refrigerant leaks.
+ ^ Check the A/C performance.
+ ^ Do the ECM/PCM idle learn procedure.
+ ^ Do the power window control unit reset procedure.
+ ^ Enter the anti-theft codes for the audio system, then enter the customer's audio system presets.
+ NOTE :
+ A new compressor comes with enough oil for the entire system. However, the oil must be balanced in the system.
+[img /images/IMP02Q313/asian150/38594200/] 
+Disclaimer 
+
+===== Technical%20Service%20Bulletins/All%20Technical%20Service%20Bulletins/Engine%20-%20MIL%20ON%2C%20DTC%27s%20P2646%2FP2651%20Or%20P2647%2FP2652/ 
+ 
+Engine - MIL ON, DTC's P2646/P2651 Or P2647/P2652 13-021
+February 28, 2013
+Applies To: 
+See VEHICLES AFFECTED
+MIL Comes On With DTCs P2646/P2651 or P2647/P2652
+SYMPTOM
+The MIL comes on with one of these DTCS:
+^ P2646/P2651 (Rocker arm oil pressure switch circuit low voltage).
+^ P2647/P2652 (Rocker arm oil pressure switch circuit high voltage).
+ NOTE : 
+ The symptom may be intermittent, and you may not be able to duplicate it after cleaning the DTC.
+POSSIBLE CAUSE
+The rocker arm oil pressure switch may fail intermittently.
+VEHICLES AFFECTED
+2003-12 Accord L4 - ALL
+2002-05 Civic Si - ALL
+2002-09 CR-V - ALL
+2011 CR-Z - ALL
+2003-11 Element - ALL
+2007-11 Fit - ALL
+CORRECTIVE ACTION
+Replace the rocker arm oil pressure switch.
+PARTS INFORMATION
+ NOTE : 
+ To help clarify where new parts are used in the REPAIR PROCEDURE, the new part is listed in the applicable step with a ">" symbol.
+Rocker Arm Oil Pressure Switch:
+ P/N 37250-PNE-G01 
+0-ring (13 mm X 1.5 mm):
+ P/N 91319-PAA-A01
+WARRANTY CLAIM INFORMATION
+The normal warranty applies.
+Operation Number: 110165
+Flat Rate Time: 0.3 hour
+Failed Part: P/N 37250-PNE-GO1
+Defect Code: 03214
+Symptom Code: 03272
+Skill Level: Repair Technician
+REPAIR PROCEDURE
+[img /images/IMP02Q313/asian150/218279967/] 
+1. Remove the power steering high pressure hose bracket mounted on the valve cover.
+[img /images/IMP02Q313/asian150/218382287/] 
+2. Remove the rocker arm oil pressure switch and the 0-ring:
+3. Install the new rocker arm oil pressure switch and the and new 0-ring. Torque the oil pressure switch to 22 N.m (16 lb-ft).
+ > Rocker arm oil pressure switch
+ > 0-ring
+4. Reinstall the power steering high pressure hose bracket.
+5. Clear the code(s) with the HDS.
+ NOTE :
+ If the DTC returns, refer to the troubleshooting procedure for the DTC that is set. 
+
+===== Technical%20Service%20Bulletins/All%20Technical%20Service%20Bulletins/Engine%20Controls%20-%20DTC%20P2646%2C%20P2647/ 
+ 
+Engine Controls - DTC P2646, P2647 
+SOURCE: Honda Service News
+TITLE: Replace VTEC Oil Pressure Switch for DTC P2646, P2647
+APPLIES TO: 03-05 Accord 4-cylinder
+ 03-05 Element
+ 02-05 CR-V
+SERVICE TIP:
+Got a vehicle in your shop with either of these DTCs?
+ - DTC P2646 (VTEC oil pressure switch circuit low voltage)
+ - DTC P2647 (VTEC oil pressure switch circuit high voltage)
+Replacing the VTEC oil pressure switch usually fixes the problem. If it doesn't, then press on with normal troubleshooting. 
+
+===== Technical%20Service%20Bulletins/Customer%20Interest/Emissions%20-%20MIL%20ON%2FDTC%20P1457%20Set/ 
+ 
+Emissions - MIL ON/DTC P1457 Set 08-016
+March 18, 2008
+Applies To: 
+2001-05 Civic 2/4-Door-ALL
+2002-05 Civic 3-Door - ALL
+2003-05 Civic Hybrid ULEV - ALL
+2002-04 CR-V - ALL
+ MIL Comes On With DTC P1457
+SYMPTOM
+The MIL comes on with DTC P1457 ( EVAP control system leakage).
+PROBABLE CAUSE
+The EVAP solenoid valve (fuel vent module) is blocked or restricted.
+CORRECTIVE ACTION
+Install an EVAP solenoid valve kit.
+PARTS INFORMATION
+WARRANTY CLAIM INFORMATION
+[img /images/IMP02Q313/asian150/461058332/] 
+In warranty: 
+The normal warranty applies.
+Failed Part: P/N 17380-55A-A32 
+ H/C 7083124
+Defect Code: 03214
+Symptom Code: 03203
+Skill Level: Repair Technician
+Out of warranty: 
+Any repair performed after warranty expiration may be eligible for goodwill consideration by the District Parts and Service Manager or your Zone Office. You must request consideration, and get a decision, before starting work.
+DIAGNOSIS
+1. Connect the HDS to the DLC (data link connector), and check for DTCs.
+ Is DTC P1457 stored?
+ Yes - Clear the DTC, then go to step 2.
+ No - This service bulletin does not apply; continue with normal troubleshooting.
+2. Follow the HDS screen prompts, and do the EVAP Function Test.
+ Did the EVAP solenoid valve pass the test?
+ Yes - This service bulletin does not apply; continue with normal troubleshooting.
+ No - If you're working on a Civic, go to REPAIR PROCEDURE A. If you're working on a CR-V, go to REPAIR PROCEDURE B.
+REPAIR PROCEDURE A
+1. Relieve the fuel pressure :
+ ^ Refer to the Fuel and Emissions section of the appropriate service manual, or
+ ^ Online, enter keywords FUEL PRESSURE , and select Fuel Pressure Relieving from the list.
+2. Drain the fuel, then remove the fuel tank :
+ ^ Refer to the Fuel and Emissions section of the appropriate service manual, or
+ ^ Online, enter keyword TANK, and select Fuel Tank Replacement from the list.
+3. Remove the EVAP solenoid valve:
+ ^ Remove pressure sensor tube B; it will be reused.
+ ^ Remove fuel vent tube B; it will not be reused.
+ ^ Disconnect fuel vent tube C from the EVAP solenoid valve. The tube will be reused.
+ ^ Disconnect the 2P connector from the EVAP solenoid valve.
+[img /images/IMP02Q313/asian150/461066851/] 
+ ^ Remove the EVAP solenoid valve (two bolts). The bolts will be reused. The valve will not be reused.
+[img /images/IMP02Q313/asian150/461214275/] 
+4. Attach the tubes and the joint from the kit onto the new EVAP solenoid valve as shown.
+5. Install the new EVAP solenoid valve using the original bolts.
+[img /images/IMP02Q313/asian150/461338632/] 
+6. Connect the original hoses and the new tubes as shown.
+7. Reinstall the fuel tank .
+8. Reinstall the fuel tank unit with a new base gasket and a new locknut.
+9. Reinstall the fuel line to the tank with a new fuel feed retainer.
+10. Refill the tank with the fuel you removed in step 2.
+REPAIR PROCEDURE B
+1. Relieve the fuel pressure :
+ ^ Refer to page 11-161 of the 2002-2004 CR-V Service Manual, or
+ ^ Online, enter keywords FUEL PRESSURE , and select Fuel Pressure Relieving from the list.
+2. Drain the fuel, then remove the fuel tank :
+ ^ Refer to page 11-171 of the service manual, or
+ ^ Online, enter keyword TANK, and select Fuel Tank Replacement from the list.
+3. Remove the EVAP canister:
+ ^ Refer to page 11-217 of the service manual, or
+ ^ Online, enter keyword CANISTER, and select EVAP Canister Replacement from the list.
+4. Remove the EVAP solenoid valve from the EVAP canister:
+ ^ Remove pressure sensor tube B; it will not be reused.
+ ^ Remove fuel vent tube C; it will not be reused.
+ ^ Remove fuel vent tube D; it will not be reused.
+ ^ Disconnect the 2P connector.
+ ^ Remove the EVAP solenoid valve bolts. The bolts will be reused.
+[img /images/IMP02Q313/asian150/461521174/] 
+ ^ Disconnect the remaining hoses connected to the EVAP solenoid valve, then remove the valve. The valve will not be reused.
+[img /images/IMP02Q313/asian150/461690075/] 
+5. Attach the tubes, the vacuum chamber, the joint, and the clips from the kit onto the new EVAP solenoid valve as shown.
+6. Install the new EVAP solenoid valve on the EVAP canister using the original bolts.
+7. Reinstall the EVAP canister.
+[img /images/IMP02Q313/asian150/461834949/] 
+8. Connect the original hoses and the new tube as shown.
+9. Reinstall the fuel tank .
+10. Reinstall the fuel tank unit with a new base gasket and a new locknut.
+11. Reinstall the fuel line to the tank with a new fuel feed retainer.
+12. Refill the tank with the fuel you removed in step 2.
+[img /images/IMP02Q313/asian150/38594200/] 
+Disclaimer 
+
+===== Technical%20Service%20Bulletins/All%20Technical%20Service%20Bulletins/Emissions%20-%20DTC%20P1457%20Possible%20Clogged%20Line/ 
+ 
+Emissions - DTC P1457 Possible Clogged Line SOURCE:
+Honda Service News July 2004
+TITLE:
+Got DTC P1457? Check for a Clogged EVAP Canister Purge Line.
+APPLIES TO:
+2002-03 CR-V
+SERVICE TIP:
+Got a DTC P1457 [ EVAP control system leakage (EVAP canister system)]? The problem could be a clogged EVAP canister purge line. If your customer was out four-wheeling it, there's a good possibility that mud, sand, or debris could have been sucked into the line, especially if the EVAP canister got damaged or ripped from the vehicle or if the vehicle was plowing through some deep,
+standing water.
+A clogged EVAP canister purge line can delay the supply of vacuum to the fuel tank pressure (FTP) sensor. If the FTP sensor reacts sluggishly, the voltage won't drop down fast enough, and the ECM/PCM will set a DTC P1457 and maybe a test ID (TID) 2D.
+To check for a clogged EVAP canister purge line, connect the HDS with version 1.012.023 or later software to the 16P DLC , and run the EVAP System Function Test. If the EVAP system fails the test, you'll need to troubleshoot and repair the problem. If the EVAP system passes the test, then follow these steps to check for a clog in the purge line from the EVAP canister to the engine:
+ 1. Disconnect the purge hose at the EVAP canister, and attach a vacuum gauge to the hose.
+ 2. Start the engine, and activate the purge control valve by back-probing and grounding the YEL/BLU wire. Watch the vacuum gauge.
+ - If the gauge needle instantly reads the manifold vacuum, then the purge valve is clear. Reconnect the purge hose to the EVAP canister, and look for other possible causes.
+ - If the gauge needle doesn't instantly read the manifold vacuum, then the purge control valve could be clogged. Go to step 3.
+ 3. Disconnect the hose between the EVAP test port and the purge control valve. Attach a vacuum gauge to the test port end of the hose.
+ 4. Activate the purge control valve by backprobing and grounding the YEL/BLU wire. Watch the vacuum gauge.
+ - If the gauge needle instantly reads the manifold vacuum, then clean or replace the EVAP test port, the purge line to the rear of the vehicle, or both.
+ - If the gauge needle doesn't instantly read the manifold vacuum, then look for a clogged purge control valve port in the intake manifold. If the port is clear, then replace the purge control valve, and retest.
+
+===== Technical%20Service%20Bulletins/All%20Technical%20Service%20Bulletins/Electrical%20-%20DTC%20P1298%20Stored%20in%20ECM%2FPCM/ 
+ 
+Electrical - DTC P1298 Stored in ECM/PCM 05-006
+May 6, 2005
+Updated information is noted by asterisks.
+Applies To: 
+2001-05 Civic - ALL
+*2002-04 CR-V - ALL*
+DTC P1298 Is Stored in the ECM/PCM
+(Supersedes 05-006, dated February 25, 2005, to change the CR-V model-year range)
+SYMPTOM
+DTC P1298 (electrical load detector (ELD) circuit high voltage) is stored in the ECM/PCM.
+PROBABLE CAUSE
+The electronic load detector ( ELD ) has a faulty solder joint.
+CORRECTIVE ACTION
+Replace the ELD .
+ NOTE : 
+ Previously, if an ELD required replacement, you had to replace the under-hood fuse/relay box. To reduce repair costs, replacement ELDs are now available.
+PARTS INFORMATION
+Electronic Load Detector:
+ P/N 38255-S5A-003, H/C 7987571
+WARRANTY CLAIM INFORMATION
+In warranty: 
+The normal warranty applies.
+Operation Number: 121195
+Flat Rate Time: 0.4 hour 
+Failed Part:
+ Civic P/N 38250-S5A-A03
+ H/C 7472277
+ CR-V P/N 38250-S9A-A01 
+ H/C 6890594
+Defect Code: 06402
+Symptom Code: 01201
+Template ID: 05-006A
+Skill Level: Repair Technician
+Out of warranty: 
+Any repair performed after warranty expiration may be eligible for goodwill consideration by the District Parts and Service Manager or your Zone Office. You must request consideration, and get a decision, before starting work.
+REPAIR PROCEDURE
+1. Make sure you have the anti-theft code for the audio unit. Write down the customer's audio presets.
+2. Disconnect the negative battery cable from the battery.
+3. Remove the under-hood fuse/relay box cover.
+[img /images/IMP02Q313/asian150/274841565/] 
+4. Release the three clips, and remove the under- hood fuse/relay box from the holder. 
+ CR-V only: Release the wire harness clip from the fuse/relay box holder
+[img /images/IMP02Q313/asian150/274858268/] 
+5. Remove the lower cover from the fuse/relay box.
+[img /images/IMP02Q313/asian150/274864151/] 
+6. Disconnect the 3P ELD connector.
+[img /images/IMP02Q313/asian150/274871636/] 
+7. Remove the four screws that hold the two fuses, and remove the fuses.
+[img /images/IMP02Q313/asian150/274880382/] 
+8. Release the tab that holds the ELD , and pull up on the ELD to remove it.
+9. Remove the bus bar from the ELD , and insert the bar into the new ELD.
+10. Install the new ELD and bus bar into the fuse/relay box.
+11. Reinstall the two fuses.
+12. Reinstall the 3P ELD connector and the lower fusel relay box cover.
+13. Reinstall the fuse/relay box onto its holder. 
+ CR-V only: Reinstall the wire harness clip onto the holder.
+14. Reinstall the fuse/relay box cover.
+15. Reconnect the negative battery cable.
+16. Do the idle learn procedure:
+ ^ Make sure all electrical items (A/C, audio unit, defogger, lights, etc.) are off.
+ ^ Start the engine and let it warm up to its normal operating temperature (the cooling fans cycle twice).
+ ^ Let the engine idle (throttle closed and all electrical items off) for 10 minutes.
+17. CR-V only: Reset the power window control unit:
+ ^ Turn the ignition switch to ON (II).
+ ^ Make sure the driver's window is fully closed.
+ ^ Push down and hold the window switch until the window goes all the way down.
+ ^ Pull back and hold the window switch until the window goes all the way up, then hold the switch for at least 2 more seconds.
+18. Enter the audio unit anti-theft code, and set the clock. Enter the audio presets.
+[img /images/IMP02Q313/asian150/38594200/] 
+Disclaimer 
+

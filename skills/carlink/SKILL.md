@@ -7,7 +7,7 @@ description: Run vehicle diagnostics through Aaron's OBDLink EX with the `carlin
 
 `carlink` (source `~/carlink`, binary on `PATH` after `~/carlink/install.sh`) talks to an
 **OBDLink EX** USB adapter and prints **JSON only**. It is built for you, not for Aaron to run.
-The knowledge base behind it is the wiki at `~/wikikb/vehicle-diagnostics/` (start at
+The knowledge base behind it is the wiki in the repo at `~/carlink/kb/` (start at
 `wiki/overview.md`; per-car pages `crv-2004.md`, `odyssey-2016.md`, `kona-electric-2020.md`).
 
 ## Before connecting
@@ -89,4 +89,5 @@ simulator output as Aaron's car.
 ## Record what you learn
 
 If a scan reveals something about the car the wiki does not have (a PID that does not answer, a
-normal value range, a fix that worked), add it to the car's wiki page per the `wikikb` skill.
+normal value range, a fix that worked), add it to the car's page in `~/carlink/kb/wiki/` per the
+`wikikb` skill, and commit it in `~/carlink`.

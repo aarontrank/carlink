@@ -1,0 +1,73 @@
+Source: Operation CHARM service manual, 2004 Honda CR-V 4WD L4-2.4L — https://charm.li/Honda%20Truck/2004/CR-V%204WD%20L4-2.4L/Repair%20and%20Diagnosis/ (section paths in ===== headers). Retrieved 2026-11-07.
+===== A%20L%20L%20%20Diagnostic%20Trouble%20Codes%20%28%20DTC%20%29/Testing%20and%20Inspection/P%20Code%20Charts/P0011/ 
+ 
+P0011 DTC P0011:VTC System Malfunction 
+ 1. Reset the ECM/PCM.
+ 2. Start the engine. Hold the engine at 3,000 rpm with no load (in Park or neutral) until the radiator fan comes on.
+ 3. Test-drive at a steady speed between 20-40 mph (30-60 km/h) for 10 minutes .
+ 4. Check for Temporary DTC P0011 with the scan tool or the HDS.
+ Is Temporary DTC P0011 indicated?
+ YES - Go to step 5.
+ NO - Intermittent failure, system is OK at this time. Check for poor connections or loose terminals at the VTC oil control solenoid valve and at the ECM/PCM.
+ 5. Watch the low oil pressure light with the engine running.
+ Is the low oil pressure light on?
+ YES - Check the oil pressure.
+ NO - Go to step 6.
+ 6. Turn the ignition switch OFF.
+ 7. Remove the power steering pump and the auto-tensioner.
+[img /images/IMP02Q313/asian150/4198150/] 
+ 8. Remove the VTC strainer. Check the VTC strainer for clogging.
+ Is the strainer OK?
+ YES - Go to step 9.
+ NO - Clean the VTC strainer, then replace the engine oil filter and the engine oil.
+ 9. Check the VTC oil control solenoid valve.
+ Is the VTC oil control solenoid valve OK?
+ YES - Go to step 10.
+ NO - Clean the ports of the valve, or replace the valve.
+ 10. Install the VTC oil control solenoid valve.
+ 11. Start the engine. Hold the engine at 700 - 1,000 rpm .
+[img /images/IMP02Q313/asian150/4201275/] 
+ 12. Connect ECM/PCM connector terminal B23 to body ground with a jumper wire.
+[img /images/IMP02Q313/asian150/4203123/] 
+ 13. Connect ECM/PCM connector terminals A3 and B1 with a jumper wire momentarily.
+ NOTE: Do not jump for more than 1 minute .
+ Did the engine stall or run rough?
+ YES - Test-drive at a steady speed between 20-40 mph (30-60 km/h) for 10 minutes .
+ If temporary DTC P0011 is indicated, update the ECM/PCM if it does not have the latest software, or substitute a known-good ECM/PCM, then recheck. If the symptom/indication goes away with a known-good ECM/PCM, replace the original ECM/PCM.
+ NO - Go to step 14.
+ 14. Check the VTC actuator. 
+ Is the VTC actuator OK?
+ YES - Remove the power steering pump and the auto-tensioner, and clean or replace the VTC oil strainer. Update the ECM/PCM if it does not have the latest software, or substitute a known-good ECM/PCM, then recheck. If the symptom/indication goes away with a known-good ECM/PCM, replace the original ECM/PCM.
+ NO - Replace the VTC actuator.
+
+===== A%20L%20L%20%20Diagnostic%20Trouble%20Codes%20%28%20DTC%20%29/Testing%20and%20Inspection/P%20Code%20Charts/P0420/ 
+ 
+P0420 DTC P0420: Catalyst System Efficiency Below Threshold 
+ NOTE: If some of the Ducts listed below are stored at the same time as DTC P0420, troubleshoot those Ducts first, then recheck for DTC P0420.
+P0137, P0138: Secondary HO2S (Sensor 2)
+P0141: Secondary HO2S (Sensor 2) heater
+ 1. Reset the ECM/PCM.
+ 2. Start the engine. Hold the engine at 3,000 rpm with no load (in Park or neutral) until the radiator fan comes on.
+ 3. Test-drive at 50-55 mph (80-88 km/h) for about 2 minutes . Then decelerate for at least 4 seconds with the throttle completely closed. Then accelerate to 55 mph (88 km/h) , and try to hold it until the scan tool indicates FAIL or PASS as the TWC test result.
+ Is the test result FAIL?
+ YES - Check the three way catalytic converter (TWC). If necessary, replace the TWC. 
+ NO - Intermittent failure, system is OK at this time.
+
+===== A%20L%20L%20%20Diagnostic%20Trouble%20Codes%20%28%20DTC%20%29/Testing%20and%20Inspection/P%20Code%20Charts/P0700/ 
+ 
+P0700 
+ NOTE: P0700 INDICATES A/T DTC
+ When you're using the scanner to retrieve engine DTCs on an OBD-II-equipped vehicle, DTC P0700 means you have an A/T DTC. You won't see P0700 in any troubleshooting section of the service manual; it's a generic code that lets you know there's an A/T DTC while you're checking engine DTCs.)
+ To view the freeze data from the stored A/T DTC, don't clear P0700 until you've gone into the scanners freeze frame menu and selected freeze frame data or DTC. If you clear P0700 before you retrieve the DTC, you'll lose the freeze frame data and you won't be able to view the conditions that were present when the DTC occurred.
+ ADVANCED DIAGNOSTICS 
+ DTC P0700: Automatic Transmission Control System
+[img /images/IMP02Q313/asian150/11213477/] 
+ General Description
+ This DTC is used for determining if a malfunction is on the engine side or the A/T side when checking with a scan tool. When a device on the A/T side is malfunctioning, the automatic transmission control system signals the PGM-FI control system to illuminate the MIL. If the powertrain control module (PCM) receives a signal that demands the MIL illumination, it illuminates the MIL and a DTC is stored.
+ Monitor Execution, Sequence, Duration, DTC Type
+[img /images/IMP02Q313/asian150/11214796/] 
+ Enable Conditions
+[img /images/IMP02Q313/asian150/11216388/] 
+ Malfunction Threshold
+ It depends on the Enable Conditions on A/T side.
+

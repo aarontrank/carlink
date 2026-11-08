@@ -1,0 +1,32 @@
+Source: Operation CHARM service manual, 2004 Honda CR-V 4WD L4-2.4L — https://charm.li/Honda%20Truck/2004/CR-V%204WD%20L4-2.4L/Repair%20and%20Diagnosis/ (section paths in ===== headers). Retrieved 2026-11-07.
+===== Powertrain%20Management/Computers%20and%20Control%20Systems/Testing%20and%20Inspection/Initial%20Inspection%20and%20Diagnostic%20Overview/Description%20of%20On-Board%20Diagnostics/ 
+ 
+Description of On-Board Diagnostics Electronic Control System 
+The functions of the fuel and emission control systems are managed by the engine control module (ECM) on vehicles with manual transmissions or the powertrain control module (PCM) on vehicles with automatic transmissions.
+ Fail-safe Function 
+When an abnormality occurs in the signal from a sensor, the ECM/PCM ignores that signal and assumes a pre-programmed value for that sensor that allows the engine to continue to run.
+ Back-up Function 
+When an abnormality occurs in the ECM/PCM, the injectors are controlled by a back-up circuit independent of the system to permit minimal driving.
+ Self-diagnosis 
+When an abnormality occurs in the signal from a sensor, the ECM/PCM supplies ground for the malfunction indicator lamp (MIL) and stores the diagnostic trouble code (DTC) in erasable memory. When the ignition is first turned on, the ECM/PCM supplies ground to the MIL for 15 to 20 seconds to check the MIL bulb condition. If all readiness code are not set, the MIL will flash five times. If readiness code are set to complete, the MIL will go out. The MIL may be turned off by the ECM/PCM if the problem that originally caused the MIL to be illuminated is a intermittent one.
+ Two Driving Cycle Detection Method 
+To prevent false indications, the "two driving cycle detection method" is used for some self-diagnostic functions. When an abnormality occurs, the ECM/PCM stores it in its memory. When the same abnormality recurs after the ignition switch is turned OFF and ON (II) again, the ECM/PCM turns on the MIL .
+
+===== Powertrain%20Management/Transmission%20Control%20Systems/Testing%20and%20Inspection/Reading%20and%20Clearing%20Diagnostic%20Trouble%20Codes/Reading%20Diagnostic%20Trouble%20Codes/With%20Manufacturer%27s%20Scan%20Tool/ 
+ 
+With Manufacturer's Scan Tool General Troubleshooting Information 
+ How to Check for DTCs with the Honda PGM Tester/Scan Tool 
+[img /images/IMP02Q313/asian150/496388711/] 
+ When the powertrain control module (PCM) senses an abnormality in the input or output systems, the (D) indicator (A) in the gauge assembly (B) will usually blink.
+[img /images/IMP02Q313/asian150/496392291/] 
+ When the data link connector (DLC) (A) (located under the dash behind the center console) is connected to the OBDII Scan Tool or Honda PGM Tester (B), it will indicate the diagnostic trouble code (DTC) when the ignition switch is turned ON (II).
+ If the (D) indicator or malfunction indicator lamp (MIL) has been reported on, or if a driveability problem is suspected, follow this procedure:
+ 1. Connect the OBDII Scan Tool (conforming to SAE J1978) or Honda PGM Tester to the DLC . (See the OBD II Scan Tool or Honda PGM Tester user's manual for specific instructions. If you are using the Honda PGM Tester, make sure it is set to the SAE DTC type.)
+ 2. Turn the ignition switch ON (II), and observe the DTC on the screen.
+ 3. Record all fuel and emissions DTCs,A/T DTCs, and freeze data.
+ 4. If there is a fuel and emissions DTC, first check the fuel and emissions system as indicated by the DTC (except for DTC P0700, DTC P0700 means there is one or more ACT DTCs, and no problems were detected in the fuel and emissions circuit of the PCM).
+ 5. Get the customer's radio anti-theft code, and write down the radio station presets.
+ 6. Reset the memory with the Honda PGM Tester, OBDII Scan Tool or by removing the No. 6 ECU fuse in the under-hood fuse/relay box for more than 10 seconds.
+ 7. Drive the vehicle for several minutes under the same conditions as those indicated by the freeze data, and then recheck for a DTC. If the A/T DTC returns, go to the DTC troubleshooting Index. If the DTC does not return, there was an intermittent problem within the circuit. Make sure all pins and terminals in the circuit are tight, and then go to step 8.
+ 8. Enter the radio code, reset the preset stations, and set the clock.
+

@@ -15,8 +15,8 @@ carlink history trend odyssey-2016 battery_voltage
 carlink --port sim:kona-ev-2020 scan # built-in simulator, no car needed
 ```
 
-Knowledge base: `~/wikikb/vehicle-diagnostics/` (adapter command set, OBD-II decoding, per-car
-byte maps, recalls, reset procedures, with sources).
+Knowledge base: `kb/` — an LLM wiki (`kb/schema.md`, pages in `kb/wiki/`, sources in `kb/raw/`)
+covering the adapter command set, OBD-II decoding, per-car byte maps, recalls and reset procedures.
 
 ## Safety model
 
