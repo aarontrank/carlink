@@ -10,3 +10,7 @@ pub mod serial;
 pub mod vehicles;
 pub mod report;
 pub mod actions;
+pub mod problem;
+pub mod uds;
+pub mod watch;
+pub mod probe;

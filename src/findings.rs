@@ -27,9 +27,26 @@ fn finding(severity: Severity, title: impl Into<String>, detail: impl Into<Strin
     Finding { severity, code: None, title: title.into(), detail: detail.into(), recommendation: recommendation.into() }
 }
 
+/// The engine ECU's value (7E8 on CAN, 10 on K-line) when it reports one, else the first module's.
 fn live(s: &Scan, key: &str) -> Option<f64> {
-    s.live.iter().find(|r| r.reading.key == key).map(|r| r.reading.value)
+    let mine = s.live.iter().filter(|r| r.reading.key == key);
+    mine.clone().find(|r| matches!(r.ecu.as_str(), "7E8" | "10")).or_else(|| mine.clone().next()).map(|r| r.reading.value)
 }
+
+/// Codes whose fault can destroy the engine or the high-voltage system if the car keeps being driven.
+const STOP_DRIVING: &[(&str, &str)] = &[
+    ("P0217", "Engine overheating. Stop driving; let it cool, check coolant level and the cooling fan."),
+    ("P0218", "Transmission over-temperature. Stop driving and let it cool; check the fluid level and condition."),
+    ("P0524", "Engine oil pressure too low. Stop the engine now and check the oil level before driving any further."),
+    ("P0AA6", "High-voltage isolation fault: high voltage may be leaking to the body. Do not drive or charge; have an EV-qualified technician inspect it."),
+];
+
+/// P0300 (random) and P0301–P0312 (one cylinder), plus P0313/P0314; P0315 and up are other faults.
+pub fn is_misfire(code: &str) -> bool {
+    ("P0300"..="P0314").contains(&code)
+}
+
+const MISFIRE_ADVICE: &str = "If the check-engine light is FLASHING, stop driving: a severe misfire overheats and destroys the catalytic converter. Otherwise check the spark plug, ignition coil and injector on the named cylinder.";
 
 pub fn generic(s: &Scan) -> Vec<Finding> {
     let mut out = Vec::new();
@@ -45,13 +62,24 @@ pub fn generic(s: &Scan) -> Vec<Finding> {
         let kinds: Vec<&str> = entries.iter().map(|d| d.kind).collect();
         let info = dtc::lookup(code);
         let what = info.description.clone().unwrap_or_else(|| "manufacturer-specific code".into());
-        let severity = if kinds.iter().all(|k| *k == "pending") { Severity::Advice } else { Severity::Warning };
+        let stop = STOP_DRIVING.iter().find(|(c, _)| *c == code).map(|(_, advice)| *advice);
+        let severity = if stop.is_some() {
+            Severity::Critical
+        } else if kinds.iter().all(|k| *k == "pending") {
+            Severity::Advice
+        } else {
+            Severity::Warning
+        };
         out.push(Finding {
             severity,
             code: Some(code.into()),
             title: format!("{code} — {what}"),
             detail: format!("{} ({}); reported by ECU {} as {}.", info.system, if info.manufacturer_specific { "manufacturer-specific" } else { "SAE generic" }, entries[0].ecu, kinds.join(", ")),
-            recommendation: if kinds == ["pending"] {
+            recommendation: if let Some(advice) = stop {
+                advice.into()
+            } else if is_misfire(code) {
+                MISFIRE_ADVICE.into()
+            } else if kinds == ["pending"] {
                 "Pending: seen once, not yet confirmed. Re-scan after another drive.".into()
             } else {
                 "Diagnose the cause using the freeze frame and the vehicle notes before clearing.".into()
@@ -70,8 +98,10 @@ pub fn generic(s: &Scan) -> Vec<Finding> {
 
     let running = live(s, "rpm").is_some_and(|r| r > 400.0);
     if let Some(v) = s.battery_voltage {
-        if running && v < 13.0 {
-            out.push(finding(Severity::Warning, "Charging voltage low", format!("{v:.1} V with the engine running (expected 13.5–14.7)."), "Have the alternator, belt and battery tested. Some cars lower voltage deliberately (smart charging); re-check at higher load."));
+        if running && v < 12.6 {
+            out.push(finding(Severity::Warning, "Alternator may not be charging", format!("{v:.1} V with the engine running — no higher than a resting battery."), "Turn on the headlights and blower and re-check: below 13.5 V with loads on means test the alternator, belt and battery cables."));
+        } else if running && v < 13.2 {
+            out.push(finding(Severity::Info, "Charging voltage on the low side", format!("{v:.1} V with the engine running."), "Often normal: Honda (and other) charging control lowers the voltage at light load. Turn on the headlights and blower; it should rise above 13.5 V. If it does not, test the alternator."));
         } else if running && v > 15.0 {
             out.push(finding(Severity::Warning, "Charging voltage high", format!("{v:.1} V with the engine running."), "Over-charging damages the battery and electronics; have the regulator/alternator checked."));
         } else if !running && v < 12.2 {
@@ -91,10 +121,16 @@ pub fn generic(s: &Scan) -> Vec<Finding> {
         }
     }
 
+    let fuel_system = live(s, "fuel_system");
+    if let Some(code @ (8.0 | 16.0)) = fuel_system {
+        let what = if code == 8.0 { "open loop because of a system fault" } else { "closed loop, but an oxygen sensor is faulty" };
+        out.push(finding(Severity::Warning, "Fuel control is degraded", format!("The engine computer reports its fuel system as {what}."), "Look for oxygen/air-fuel sensor codes and check those sensors; fuel economy and emissions suffer until it is fixed."));
+    }
+    let closed_loop = fuel_system.is_none_or(|c| c == 2.0);
     for bank in [1, 2] {
         let (Some(st), Some(lt)) = (live(s, &format!("stft_b{bank}")), live(s, &format!("ltft_b{bank}"))) else { continue };
         let total = st + lt;
-        if !running || total.abs() <= 10.0 {
+        if !running || !closed_loop || total.abs() <= 10.0 {
             continue;
         }
         let sev = if total.abs() >= 20.0 { Severity::Warning } else { Severity::Advice };
@@ -127,7 +163,9 @@ mod tests {
     }
 
     fn with(mut s: Scan, pid: u8, data: &[u8]) -> Scan {
-        s.live.push(EcuReading { ecu: "7E8".into(), reading: decode_pid(pid, data).unwrap() });
+        for reading in crate::obd::decode_pid_all(pid, data) {
+            s.live.push(EcuReading { ecu: "7E8".into(), reading });
+        }
         s
     }
 
@@ -214,12 +252,52 @@ mod tests {
     #[test]
     fn charging_voltage_engine_running() {
         let mut s = with(base(), 0x0C, &[0x0B, 0x40]);
-        s.battery_voltage = Some(12.6);
-        assert!(has(&s, Severity::Warning, "Charging voltage low"));
+        s.battery_voltage = Some(12.3);
+        assert!(has(&s, Severity::Warning, "not be charging"));
         s.battery_voltage = Some(15.4);
         assert!(has(&s, Severity::Warning, "Charging voltage high"));
         s.battery_voltage = Some(14.2);
         assert!(titles(&s).is_empty());
+    }
+
+    #[test]
+    fn honda_style_low_charging_voltage_is_only_info() {
+        let mut s = with(base(), 0x0C, &[0x0B, 0x40]);
+        s.battery_voltage = Some(12.9);
+        assert!(has(&s, Severity::Info, "Charging voltage on the low side"));
+        assert!(generic(&s)[0].recommendation.contains("13.5"));
+    }
+
+    #[test]
+    fn engine_ecu_value_drives_findings_over_another_module() {
+        let mut s = base();
+        s.live.push(EcuReading { ecu: "7E9".into(), reading: decode_pid(0x05, &[40 + 115]).unwrap() });
+        s.live.push(EcuReading { ecu: "7E8".into(), reading: decode_pid(0x05, &[40 + 90]).unwrap() });
+        assert!(titles(&s).is_empty(), "{:?}", titles(&s));
+    }
+
+    #[test]
+    fn stop_driving_codes_are_critical() {
+        for code in ["P0217", "P0524", "P0AA6"] {
+            let mut s = base();
+            s.dtcs.push(crate::scan::Dtc { code: code.into(), kind: "stored", ecu: "7E8".into() });
+            assert!(has(&s, Severity::Critical, code), "{code}");
+        }
+    }
+
+    #[test]
+    fn non_misfire_p031x_codes_do_not_get_misfire_advice() {
+        let mut s = base();
+        s.dtcs.push(crate::scan::Dtc { code: "P0315".into(), kind: "stored", ecu: "7E8".into() });
+        assert!(!generic(&s)[0].recommendation.to_lowercase().contains("flashing"));
+    }
+
+    #[test]
+    fn misfire_codes_carry_the_flashing_light_warning() {
+        let mut s = base();
+        s.dtcs.push(crate::scan::Dtc { code: "P0302".into(), kind: "stored", ecu: "7E8".into() });
+        let f = generic(&s);
+        assert!(f[0].recommendation.to_lowercase().contains("flashing"), "{}", f[0].recommendation);
     }
 
     #[test]
@@ -246,6 +324,19 @@ mod tests {
         let rich = run(with(with(base(), 0x08, &[113]), 0x09, &[128]));
         assert!(has(&rich, Severity::Advice, "bank 2 running rich"));
         assert!(titles(&with(with(base(), 0x06, &[143]), 0x07, &[141])).is_empty());
+    }
+
+    #[test]
+    fn faulty_fuel_control_is_a_warning() {
+        assert!(has(&with(base(), 0x03, &[0x08, 0x00]), Severity::Warning, "Fuel control"));
+        assert!(has(&with(base(), 0x03, &[0x10, 0x00]), Severity::Warning, "Fuel control"));
+        assert!(titles(&with(base(), 0x03, &[0x02, 0x00])).is_empty());
+    }
+
+    #[test]
+    fn fuel_trims_are_ignored_in_open_loop() {
+        let lean_running = with(with(with(base(), 0x06, &[143]), 0x07, &[141]), 0x0C, &[0x0B, 0x40]);
+        assert!(titles(&with(lean_running, 0x03, &[0x01, 0x00])).is_empty());
     }
 
     #[test]

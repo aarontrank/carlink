@@ -28,13 +28,18 @@ pub const PROFILE: Profile = Profile {
         "Maintenance: timing chain (no belt); valve clearance check at 110k mi; plugs 110k; ATF Honda DW-1 only; Type 2 coolant; 5W-20 oil.",
         "A/C blowing warm is a known compressor failure pattern (bulletin 09-076) with no OBD code.",
     ],
+    after_clear: &[
+        "Clearing also reset the PCM's learned idle: do the idle learn now (`carlink resets --vehicle crv-2004`, \"Idle learn\") before the car leaves.",
+    ],
+    modules: &[],
     known_dtcs: &[
         KnownDtc { code: "P1457", note: "EVAP leak at the canister side: usually the canister vent shut valve or a clogged purge line (Honda bulletin 08-016). Replace the valve, then smoke-test the EVAP system. Not urgent to drive." },
         KnownDtc { code: "P2646", note: "VTEC oil pressure switch reports wrong state (bulletin 13-021). Check oil level and condition first; then replace the switch (37250-PNE-G01). Safe to drive short-term." },
         KnownDtc { code: "P2647", note: "VTEC oil pressure switch stuck on (bulletin 13-021). Check oil level/condition; replace switch 37250-PNE-G01." },
         KnownDtc { code: "P0420", note: "Catalyst efficiency low. Fix any O2 sensor codes (e.g. P0141) and misfires first; then run the service-manual catalyst drive test before replacing the converter." },
         KnownDtc { code: "P0141", note: "Downstream O2 sensor heater circuit: usually the sensor itself (heater open) or its connector. Replace the secondary O2 sensor; fix this before judging a P0420." },
-        KnownDtc { code: "P0011", note: "VTC (cam timing) over-advanced: low or dirty oil, clogged VTC strainer, or a sticking VTC solenoid. Check oil level, change oil, clean/replace the strainer/solenoid. A rattle at cold start points to the VTC actuator." },
+        KnownDtc { code: "P0011", note: "VTC (cam timing) over-advanced: low or dirty oil, clogged VTC strainer, or a sticking VTC solenoid. Check oil level, change oil, clean/replace the strainer/solenoid." },
+        KnownDtc { code: "P1456", note: "EVAP leak on the fuel-tank side: first check the fuel cap is the right one, seals, and clicks when tightened (Honda TSB); then the tank-side EVAP hoses. Not urgent to drive." },
         KnownDtc { code: "P0700", note: "Transmission fault flag from the PCM; look at the accompanying P07xx code. Check ATF level/condition (Honda DW-1 only)." },
         KnownDtc { code: "P0730", note: "Incorrect gear ratio: often internal clutch wear. Check ATF (DW-1) for burnt smell/debris; with P0740 as well it usually means a rebuild." },
         KnownDtc { code: "P0740", note: "Torque converter lock-up fault: check ATF condition and lock-up solenoids; with P0730 as well it usually means a rebuild." },
@@ -52,5 +57,5 @@ pub const PROFILE: Profile = Profile {
         Reset { name: "TPMS", carlink_can_do: false, steps: &[], notes: "Not fitted on the 2004 CR-V." },
         Reset { name: "PCM replacement / immobilizer", carlink_can_do: false, steps: &[], notes: "Requires Honda HDS at a dealer." },
     ],
-    vin: &[("JHLRD", '4'), ("SHSRD", '4')],
+    vin: &[("JHLRD", '4', None), ("SHSRD", '4', None)],
 };

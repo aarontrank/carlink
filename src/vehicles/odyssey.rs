@@ -2,7 +2,8 @@
 
 use super::{KnownDtc, Powertrain, Profile, Reset, clear_reset};
 
-const VCM_MISFIRE: &str = "VCM (cylinder deactivation) oil burning fouls plugs, mostly cylinders 1–3. Check oil consumption (dipstick between changes) and the plugs/coils on the flagged cylinder. Honda warranty extension 25-061 covers this for 10 years from original sale / 150k mi — check by VIN with a Honda dealer before paying. Avoid hard driving while it misfires: it can overheat the catalytic converter.";
+const VCM_MISFIRE: &str = "VCM (cylinder deactivation) oil burning fouls plugs, mostly cylinders 1–3. Check oil consumption (dipstick between changes), pull the plug, and swap the coil to another cylinder to rule it out. Honda warranty extension 25-061 covers misfire repairs that set P0301–P0304 for 10 years from the van's ORIGINAL purchase date or 150,000 mi (the any-age window ended 2026-01-31): a 2016 first sold before 2016-11-08 is out of term — ask a Honda dealer to check the VIN before paying.";
+const RANDOM_MISFIRE: &str = "Random misfire (no single cylinder): look for a shared cause first — vacuum leak, low fuel pressure, dirty MAF (check fuel trims with `carlink watch`), then plugs and coils. If cylinder codes P0301–P0304 also appear, see their note (VCM and the Honda warranty extension).";
 
 pub const PROFILE: Profile = Profile {
     id: "odyssey-2016",
@@ -13,7 +14,6 @@ pub const PROFILE: Profile = Profile {
         "23V858: fuel pump.",
         "16V417: fuel tank welds.",
         "18V170, 17V725, 16V932, 16V933: 2nd-row seat latches.",
-        "Warranty extension 25-061: VCM-related oil consumption / misfire (10 yr from original sale / 150k mi).",
     ],
     notes: &[
         "CAN 11-bit 500k; expect the PCM at 7E8 (it also runs the transmission). Other Honda modules use 29-bit 18DAxxF1 and are unverified on a 2016.",
@@ -21,9 +21,14 @@ pub const PROFILE: Profile = Profile {
         "Clearing codes likely also wipes the crank pattern learn: do idle learn, then crank learn, then a drive cycle.",
         "Maintenance: timing belt (with water pump, plugs, valve check) is Maintenance Minder code 4, usually ~100–110k mi; ATF Honda DW-1 only; Type 2 coolant; 0W-20 oil.",
         "Judder at 20–60 mph: bulletin 17-043 (transmission software + triple DW-1 flush).",
+        "Warranty extension 25-061 (not a recall): misfire repairs that set P0301–P0304, 10 years from original purchase or 150,000 mi; vans first sold before 2016-11-08 are out of term.",
     ],
+    after_clear: &[
+        "Clearing also reset the PCM's learned values: do the idle learn, then the crank pattern learn (`carlink resets --vehicle odyssey-2016`) before the van leaves.",
+    ],
+    modules: &[],
     known_dtcs: &[
-        KnownDtc { code: "P0300", note: VCM_MISFIRE },
+        KnownDtc { code: "P0300", note: RANDOM_MISFIRE },
         KnownDtc { code: "P0301", note: VCM_MISFIRE },
         KnownDtc { code: "P0302", note: VCM_MISFIRE },
         KnownDtc { code: "P0303", note: VCM_MISFIRE },
@@ -39,10 +44,11 @@ pub const PROFILE: Profile = Profile {
         Reset { name: "Maintenance Minder / oil life", carlink_can_do: false, steps: &[
             "Ignition ON (engine off).",
             "Press the Select/Reset knob (or SEL/RESET) until the oil-life display shows, then press and hold about 10 seconds.",
-            "Choose the item to reset (or all items), then press and hold about 5 seconds; oil life returns to 100%.",
-        ], notes: "Reset only the sub-codes actually serviced." },
+            "Choose ONLY the items that were actually serviced, then press and hold about 5 seconds; oil life returns to 100%.",
+        ], notes: "Never reset code 4 (timing belt, water pump, plugs) unless that work was done: resetting all items after an oil change hides the timing-belt reminder, and a missed belt on this engine is very expensive." },
         Reset { name: "TPMS low-pressure light", carlink_can_do: false, steps: &[
-            "Set all tires to the door-placard pressure (cold).",
+            "Look at the light: if it BLINKS for about a minute and then stays on, that is a TPMS system fault (often a dead sensor battery) — inflating will not fix it; it needs a TPMS tool or a dealer.",
+            "If it is steady: set all tires to the door-placard pressure (cold).",
             "Drive above 28 mph for at least a minute; the light goes out when the sensors report correct pressure.",
         ], notes: "Wheel sensors; no calibration menu on 2016 (that came in 2018 — confirm in owner's manual p. 428). New sensors need HDS or a TPMS tool." },
         Reset { name: "Idle learn", carlink_can_do: false, steps: &[
@@ -55,5 +61,5 @@ pub const PROFILE: Profile = Profile {
             "Key off, then ON and wait 30 seconds.",
         ], notes: "Unverified for the 2016 Odyssey (Honda text from other models). Do it on a safe, empty road." },
     ],
-    vin: &[("5FNRL5", 'G')],
+    vin: &[("5FNRL5", 'G', None)],
 };

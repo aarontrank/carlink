@@ -16,6 +16,10 @@ struct Ecu {
     vin: Option<&'static str>,
     /// Service 22 etc: request hex (no spaces) -> response payload.
     extra: BTreeMap<String, Vec<u8>>,
+    /// Non-emissions module codes: (3-byte DTC, UDS status byte). Answered over UDS 19/14, or KWP 18/14 when `kwp`.
+    module_dtcs: Vec<([u8; 3], u8)>,
+    module: bool,
+    kwp: bool,
 }
 
 pub struct Sim {
@@ -23,14 +27,31 @@ pub struct Sim {
     protocol: (&'static str, &'static str),
     ecus: Vec<Ecu>,
     header: u16,
+    /// Receive filter set by `ATCRA <id>`; cleared by `ATAR` or a bare `ATCRA`.
+    rx_filter: Option<u16>,
     pub ignition_off: bool,
     /// ECUs stay silent on service 04.
     pub ignore_clear: bool,
     pub ignition_off_after_clear: bool,
     pub forget_vin_after_clear: bool,
-    pub garble_clear_reply: bool,
-    pub reject_atcra: bool,
+    /// `ATRV` reply override (e.g. "0.1V" when the adapter is on USB but not in the car).
+    pub port_voltage: Option<&'static str>,
+    /// Reply to the adapter-identity request (`ATI`).
+    pub identity: &'static str,
+    /// Replies answered instead of the simulated one, each used once, in order.
+    injected: Vec<Injection>,
+    /// (command, extra line) appended to the simulated reply, each used once: the command still takes effect.
+    appended: Vec<(String, String)>,
     pub log: Vec<String>,
+}
+
+struct Injection {
+    cmd: String,
+    reply: String,
+    /// Only while this request header is set (11-bit, e.g. 0x7D1).
+    header: Option<u16>,
+    /// Only once this command has been sent at least once.
+    after: Option<String>,
 }
 
 pub const VEHICLES: &[&str] = &["crv-2004", "odyssey-2016", "kona-ev-2020"];
@@ -48,7 +69,8 @@ impl Sim {
                     (0x01, &[0x82, 0x07, 0x65, 0x00]),
                     (0x04, &[0x40]), (0x05, &[0x7B]), (0x06, &[0x80]), (0x07, &[0x8C]),
                     (0x0B, &[0x21]), (0x0C, &[0x0C, 0x80]), (0x0D, &[0x00]), (0x0E, &[0x8C]),
-                    (0x0F, &[0x3C]), (0x11, &[0x26]),
+                    (0x0F, &[0x3C]), (0x11, &[0x26]), (0x03, &[0x02, 0x00]), (0x15, &[0x8C, 0xFF]),
+                    (0x24, &[0x80, 0x10, 0x66, 0x00]),
                 ]),
                 stored: vec![0x0420, 0x1457],
                 ..Default::default()
@@ -63,24 +85,70 @@ impl Sim {
                         (0x0E, &[0x90]), (0x0F, &[0x40]), (0x10, &[0x01, 0x90]), (0x11, &[0x28]),
                         (0x1F, &[0x02, 0x58]), (0x21, &[0x00, 0x2A]), (0x2F, &[0x80]), (0x30, &[0x05]),
                         (0x31, &[0x01, 0x10]), (0x33, &[0x63]), (0x42, &[0x37, 0x96]), (0x46, &[0x3A]),
+                        (0x03, &[0x02, 0x00]), (0x15, &[0x82, 0xFF]), (0x19, &[0x7A, 0xFF]),
+                        (0x34, &[0x80, 0x00, 0x80, 0x00]), (0x38, &[0x7F, 0xC0, 0x80, 0x10]), (0x3C, &[0x1C, 0x52]),
                     ]),
                     stored: vec![0x0303, 0x3400],
                     permanent: vec![0x0303],
-                    vin: Some("5FNRL5H6XGB000001"),
+                    vin: Some("5FNRL5H60GB000001"),
                     ..Default::default()
                 },
                 Ecu { id: 0x7E9, pids: pids(&[(0x01, &[0x00, 0x04, 0x00, 0x00]), (0x0D, &[0x00])]), ..Default::default() },
             ]),
             "kona-ev-2020" => (Bus::Can11, ("6", "ISO 15765-4 (CAN 11/500)"), vec![
-                Ecu { id: 0x7EB, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00])]), ..Default::default() },
-                Ecu { id: 0x7EC, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00]), (0x5B, &[0x5D])]), extra: kona::sim_extra(0x7EC), ..Default::default() },
-                Ecu { id: 0x7EA, extra: kona::sim_extra(0x7EA), ..Default::default() },
-                Ecu { id: 0x7A8, extra: kona::sim_extra(0x7A8), ..Default::default() },
-                Ecu { id: 0x7CE, extra: kona::sim_extra(0x7CE), ..Default::default() },
+                Ecu { id: 0x7EB, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00])]), module: true, ..Default::default() },
+                Ecu { id: 0x7EC, pids: pids(&[(0x01, &[0x00, 0x00, 0x00, 0x00]), (0x21, &[0, 0]), (0x30, &[0x10]), (0x31, &[0x01, 0x00]), (0x5B, &[0x5D])]), extra: kona::sim_extra(0x7EC), module: true, ..Default::default() },
+                Ecu { id: 0x7EA, extra: kona::sim_extra(0x7EA), module: true, ..Default::default() },
+                Ecu { id: 0x7A8, extra: kona::sim_extra(0x7A8), module: true, ..Default::default() },
+                Ecu { id: 0x7CE, extra: kona::sim_extra(0x7CE), module: true, ..Default::default() },
+                Ecu { id: 0x7D9, module: true, module_dtcs: vec![([0x56, 0x11, 0x00], 0x08)], ..Default::default() },
+                Ecu { id: 0x7DC, module: true, ..Default::default() },
+                Ecu { id: 0x778, module: true, ..Default::default() },
+                Ecu { id: 0x7BB, module: true, kwp: true, ..Default::default() },
             ]),
             other => bail!("unknown sim vehicle '{other}' (known: {})", VEHICLES.join(", ")),
         };
-        Ok(Sim { bus, protocol, ecus, header: 0x7DF, ignition_off: false, ignore_clear: false, ignition_off_after_clear: false, forget_vin_after_clear: false, garble_clear_reply: false, reject_atcra: false, log: Vec::new() })
+        Ok(Sim { bus, protocol, ecus, header: 0x7DF, rx_filter: None, ignition_off: false, ignore_clear: false, ignition_off_after_clear: false, forget_vin_after_clear: false, port_voltage: None, identity: "ELM327 v1.4b", injected: Vec::new(), appended: Vec::new(), log: Vec::new() })
+    }
+
+    /// `<vehicle>` or `<vehicle>:<fault>`; faults let an agent rehearse error paths:
+    /// `engine-off` (ignition on, 0 rpm), `ignition-off` (the car does not answer).
+    pub fn from_spec(spec: &str) -> Result<Sim> {
+        let (vehicle, fault) = spec.split_once(':').unwrap_or((spec, ""));
+        let mut sim = Sim::new(vehicle)?;
+        match fault {
+            "" => {}
+            "engine-off" => sim.ecus.iter_mut().filter(|e| e.pids.contains_key(&0x0C)).for_each(|e| {
+                e.pids.insert(0x0C, vec![0, 0]);
+            }),
+            "ignition-off" => sim.ignition_off = true,
+            "not-in-car" => {
+                sim.ignition_off = true;
+                sim.port_voltage = Some("0.1V");
+            }
+            other => bail!("unknown simulator fault '{other}' (known: engine-off, ignition-off, not-in-car)"),
+        }
+        Ok(sim)
+    }
+
+    /// Answer the next `cmd` with `reply` (e.g. `"?"`, `"LV RESET"`, a garbled frame) instead of simulating it.
+    pub fn inject(&mut self, cmd: &str, reply: &str) {
+        self.injected.push(Injection { cmd: cmd.to_string(), reply: reply.to_string(), header: None, after: None });
+    }
+
+    /// Like `inject`, but only for requests to `header`, and only after `after` has been sent.
+    pub fn inject_where(&mut self, header: u16, after: Option<&str>, cmd: &str, reply: &str) {
+        self.injected.push(Injection { cmd: cmd.to_string(), reply: reply.to_string(), header: Some(header), after: after.map(str::to_string) });
+    }
+
+    /// A module at reply ID `id` holding `dtcs`; `kwp` makes it answer KWP2000 instead of UDS.
+    pub fn add_module(&mut self, id: u16, kwp: bool, dtcs: &[([u8; 3], u8)]) {
+        self.ecus.push(Ecu { id, module: true, kwp, module_dtcs: dtcs.to_vec(), ..Default::default() });
+    }
+
+    /// Process the next `cmd` normally but add `line` to its reply (e.g. a `CAN ERROR` after the real answer).
+    pub fn append(&mut self, cmd: &str, line: &str) {
+        self.appended.push((cmd.to_string(), line.to_string()));
     }
 
     /// Make one ECU stop answering everything.
@@ -136,7 +204,16 @@ impl Sim {
         }
     }
 
-    fn answer(&self, ecu: &Ecu, req: &[u8], cmd: &str) -> Option<Vec<u8>> {
+    fn answer(&self, ecu: &Ecu, req: &[u8], cmd: &str) -> Vec<Vec<u8>> {
+        if let ([0x09, 0x02], Bus::Legacy, Some(v)) = (req, self.bus, ecu.vin) {
+            // J1979 non-CAN: 3 zero pad bytes + 17 characters, 4 per message, numbered 1..=5.
+            let bytes: Vec<u8> = [0, 0, 0].into_iter().chain(v.bytes()).collect();
+            return bytes.chunks(4).enumerate().map(|(i, c)| [vec![0x49, 0x02, i as u8 + 1], c.to_vec()].concat()).collect();
+        }
+        self.answer_one(ecu, req, cmd).into_iter().collect()
+    }
+
+    fn answer_one(&self, ecu: &Ecu, req: &[u8], cmd: &str) -> Option<Vec<u8>> {
         let dtcs = |svc: u8, list: &[u16]| {
             let mut v = vec![svc];
             if self.bus.is_can() {
@@ -169,6 +246,24 @@ impl Sim {
             [0x0A] if !ecu.pids.is_empty() => Some(dtcs(0x4A, &ecu.permanent)),
             [0x04] if !ecu.pids.is_empty() && !self.ignore_clear => Some(vec![0x44]),
             [0x09, 0x02] => ecu.vin.map(|v| [vec![0x49, 0x02, 0x01], v.as_bytes().to_vec()].concat()),
+            [0x19, 0x02, mask] if ecu.module && !ecu.kwp => {
+                let mut v = vec![0x59, 0x02, 0xFF];
+                for (dtc, status) in ecu.module_dtcs.iter().filter(|(_, st)| st & mask != 0) {
+                    v.extend_from_slice(dtc);
+                    v.push(*status);
+                }
+                Some(v)
+            }
+            [0x19, ..] if ecu.module && ecu.kwp => Some(vec![0x7F, 0x19, 0x11]),
+            [0x18, 0x02, 0xFF, 0x00] if ecu.module && ecu.kwp => {
+                let mut v = vec![0x58, ecu.module_dtcs.len() as u8];
+                for (dtc, status) in &ecu.module_dtcs {
+                    v.extend_from_slice(&dtc[..2]);
+                    v.push(*status);
+                }
+                Some(v)
+            }
+            [0x14, ..] if ecu.module => Some(vec![0x54]),
             _ => ecu.extra.get(cmd).cloned(),
         }
     }
@@ -178,14 +273,30 @@ impl Transport for Sim {
     fn exchange(&mut self, cmd: &str) -> Result<String> {
         let cmd = cmd.replace(' ', "").to_uppercase();
         self.log.push(cmd.clone());
+        let log = &self.log;
+        let header = self.header;
+        if let Some(i) = self.injected.iter().position(|j| {
+            j.cmd == cmd && j.header.is_none_or(|h| h == header) && j.after.as_ref().is_none_or(|a| log[..log.len() - 1].contains(a))
+        }) {
+            let reply = self.injected.remove(i).reply;
+            return Ok(format!("{reply}\r\r>"));
+        }
         let body = match cmd.as_str() {
-            "ATZ" | "ATI" => "ELM327 v1.4b".to_string(),
+            "ATI" => self.identity.to_string(),
+            "ATZ" => "ELM327 v1.4b".to_string(),
             "STI" => "STN2232 v5.10.3".to_string(),
             "STDI" => "OBDLink EX r1.0".to_string(),
-            "ATRV" => if self.engine_running() { "14.1V" } else { "12.6V" }.to_string(),
+            "ATRV" => self.port_voltage.unwrap_or(if self.engine_running() { "14.1V" } else { "12.6V" }).to_string(),
             "ATDPN" => format!("A{}", self.protocol.0),
             "ATDP" => format!("AUTO, {}", self.protocol.1),
-            c if self.reject_atcra && c.starts_with("ATCRA") && c.len() > 5 => "?".to_string(),
+            "ATAR" | "ATCRA" => {
+                self.rx_filter = None;
+                "OK".to_string()
+            }
+            c if c.starts_with("ATCRA") => {
+                self.rx_filter = u16::from_str_radix(&c[5..], 16).ok();
+                "OK".to_string()
+            }
             c if c.starts_with("ATSH") => {
                 self.header = u16::from_str_radix(&c[4..], 16).unwrap_or(0x7DF);
                 "OK".to_string()
@@ -197,12 +308,15 @@ impl Transport for Sim {
                 if req == [0x04] && self.forget_vin_after_clear {
                     self.ecus.iter_mut().for_each(|e| e.vin = None);
                 }
-                if req == [0x04] && self.garble_clear_reply {
-                    return Ok("7EB 01 44\rCAN ERROR\r\r>".into());
-                }
                 if req == [0x04] && self.ignition_off_after_clear {
                     self.ignition_off = true;
                     return Ok("7EB 01 44\r7EC 01 44\r\r>".into());
+                }
+                if req.first() == Some(&0x14) {
+                    let target = self.header + 8;
+                    if let Some(e) = self.ecus.iter_mut().find(|e| e.id == target && e.module) {
+                        e.module_dtcs.clear();
+                    }
                 }
                 if req == [0x04] && !self.ignore_clear {
                     for e in &mut self.ecus {
@@ -214,13 +328,17 @@ impl Transport for Sim {
                     .ecus
                     .iter()
                     .filter(|e| self.header == 0x7DF || !self.bus.is_can() || e.id == self.header + 8)
-                    .filter_map(|e| self.answer(e, &req, c).map(|p| self.frames(e.id, &p)))
-                    .flatten()
+                    .filter(|e| self.rx_filter.is_none_or(|f| e.id == f))
+                    .flat_map(|e| self.answer(e, &req, c).into_iter().flat_map(|p| self.frames(e.id, &p)).collect::<Vec<_>>())
                     .collect();
                 if lines.is_empty() { "NO DATA".to_string() } else { lines.join("\r") }
             }
         };
-        Ok(format!("{body}\r\r>"))
+        let extra = match self.appended.iter().position(|(c, _)| *c == cmd) {
+            Some(i) => format!("\r{}", self.appended.remove(i).1),
+            None => String::new(),
+        };
+        Ok(format!("{body}{extra}\r\r>"))
     }
 }
 #[cfg(test)]
@@ -242,6 +360,14 @@ mod tests {
         assert!(s.exchange("03").unwrap().contains("43 02"));
         s.exchange("04").unwrap();
         assert!(s.exchange("03").unwrap().contains("43 00"));
+    }
+
+    #[test]
+    fn spec_selects_vehicle_and_fault() {
+        let mut s = Sim::from_spec("crv-2004:engine-off").unwrap();
+        assert_eq!(s.exchange("010C").unwrap(), "48 6B 10 41 0C 00 00 10\r\r>");
+        assert!(Sim::from_spec("crv-2004:flat-tire").is_err());
+        assert!(Sim::from_spec("odyssey-2016:ignition-off").unwrap().ignition_off);
     }
 
     #[test]

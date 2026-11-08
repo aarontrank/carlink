@@ -37,21 +37,25 @@ pub struct Profile {
     pub wiki: &'static str,
     pub recalls: &'static [&'static str],
     pub notes: &'static [&'static str],
+    /// Extra steps after a successful clear on this car.
+    pub after_clear: &'static [&'static str],
+    /// Modules whose trouble codes carlink reads (and can clear) beyond the emissions codes.
+    pub modules: &'static [crate::uds::Module],
     #[serde(skip)]
     known_dtcs: &'static [KnownDtc],
     #[serde(skip)]
     resets: &'static [Reset],
-    /// (VIN prefix, model-year character at VIN position 10)
+    /// (VIN prefix, model-year character at VIN position 10, required character at VIN position 8 if any)
     #[serde(skip)]
-    vin: &'static [(&'static str, char)],
+    vin: &'static [(&'static str, char, Option<char>)],
 }
 
 pub static PROFILES: &[Profile] = &[crv::PROFILE, odyssey::PROFILE, kona::PROFILE];
 
 const CLEAR_STEPS: &[&str] = &[
+    "Only after the repair: explain what clearing does and get an explicit yes from the person (carlink skill, step 6).",
     "Ignition ON, engine OFF (EV: not required to be READY).",
-    "carlink clear --vehicle <id> --confirm-clear-codes --note \"<why>\"",
-    "Readiness monitors restart; drive normally for several days before an emissions inspection.",
+    "Then run `carlink clear` as the skill's step 6 shows; read clear_status and follow next_steps.",
 ];
 
 pub(crate) const fn clear_reset(notes: &'static str) -> Reset {
@@ -64,7 +68,37 @@ pub fn by_id(id: &str) -> Option<&'static Profile> {
 
 pub fn detect(vin: &str) -> Option<&'static Profile> {
     let year = vin.chars().nth(9)?;
-    PROFILES.iter().find(|p| p.vin.iter().any(|(prefix, y)| vin.starts_with(prefix) && year == *y))
+    let eighth = vin.chars().nth(7)?;
+    PROFILES.iter().find(|p| p.vin.iter().any(|(prefix, y, e)| vin.starts_with(prefix) && year == *y && e.is_none_or(|e| e == eighth)))
+}
+
+/// World manufacturer identifiers (VIN positions 1–3) for the makes a Honda/Hyundai shop sees.
+const WMI: &[(&str, &str)] = &[
+    ("1HG", "Honda"), ("2HG", "Honda"), ("3HG", "Honda"), ("5FN", "Honda"), ("5J6", "Honda"), ("7FA", "Honda"),
+    ("19X", "Honda"), ("2HK", "Honda"), ("JHL", "Honda"), ("JHM", "Honda"), ("SHH", "Honda"), ("SHS", "Honda"),
+    ("19U", "Acura"), ("5J8", "Acura"), ("JH4", "Acura"),
+    ("KMH", "Hyundai"), ("KM8", "Hyundai"), ("5NP", "Hyundai"), ("5NM", "Hyundai"),
+    ("KNA", "Kia"), ("KND", "Kia"), ("5XX", "Kia"), ("5XY", "Kia"), ("3KP", "Kia"),
+    ("KMT", "Genesis"),
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct VinFacts {
+    pub make: Option<&'static str>,
+    pub model_year: Option<u16>,
+    pub check_digit_ok: bool,
+}
+
+/// Make (from a short WMI table) and model year (position 10; position 7 being a letter means 2010+).
+pub fn vin_info(vin: &str) -> VinFacts {
+    let make = WMI.iter().find(|(w, _)| vin.starts_with(w)).map(|(_, m)| *m);
+    let b = vin.as_bytes();
+    let model_year = (b.len() == 17).then(|| {
+        let base: u16 = if b[6].is_ascii_alphabetic() { 2010 } else { 1980 };
+        let pos = b"ABCDEFGHJKLMNPRSTVWXY123456789".iter().position(|c| *c == b[9])? as u16;
+        Some(base + pos)
+    }).flatten();
+    VinFacts { make, model_year, check_digit_ok: crate::obd::vin_check_digit_ok(vin) }
 }
 
 /// Vehicle-specific reads beyond generic OBD-II. Failures become info findings, never abort the scan.
@@ -91,7 +125,12 @@ pub fn extended<T: crate::adapter::Transport>(p: &Profile, a: &mut crate::adapte
 pub fn annotate(p: &Profile, _scan: &crate::scan::Scan, extended: &[crate::obd::Reading], findings: &mut Vec<crate::findings::Finding>) {
     for f in findings.iter_mut() {
         if let Some(note) = f.code.as_deref().and_then(|c| dtc_note(p, c)) {
-            f.recommendation = note.into();
+            // Safety advice (stop driving, flashing light) stays first; the car-specific note follows it.
+            f.recommendation = if f.severity == crate::findings::Severity::Critical || f.code.as_deref().is_some_and(crate::findings::is_misfire) {
+                format!("{} On this car: {note}", f.recommendation)
+            } else {
+                note.into()
+            };
         }
     }
     if p.id == "kona-ev-2020" {
@@ -113,8 +152,8 @@ mod tests {
 
     #[test]
     fn detects_profiles_from_vin() {
-        assert_eq!(detect("5FNRL5H6XGB000001").map(|p| p.id), Some("odyssey-2016"));
-        assert_eq!(detect("JHLRD78874C000001").map(|p| p.id), Some("crv-2004"));
+        assert_eq!(detect("5FNRL5H60GB000001").map(|p| p.id), Some("odyssey-2016"));
+        assert_eq!(detect("JHLRD78834C000001").map(|p| p.id), Some("crv-2004"));
         assert_eq!(detect("SHSRD78874U000001").map(|p| p.id), Some("crv-2004"));
         assert_eq!(detect("KM8K53AG0LU000001").map(|p| p.id), Some("kona-ev-2020"));
     }
@@ -152,11 +191,39 @@ mod tests {
     }
 
     #[test]
+    fn safety_advice_survives_the_vehicle_note() {
+        let p = by_id("kona-ev-2020").unwrap();
+        let mut f = vec![crate::findings::Finding { severity: crate::findings::Severity::Critical, code: Some("P0AA6".into()), title: "t".into(), detail: "d".into(), recommendation: "Do not drive or charge.".into() }];
+        let scan = crate::scan::scan(&mut crate::adapter::Adapter::connect(crate::sim::Sim::new("kona-ev-2020").unwrap()).unwrap()).unwrap();
+        annotate(p, &scan, &[], &mut f);
+        assert!(f[0].recommendation.starts_with("Do not drive or charge."));
+        assert!(f[0].recommendation.contains("On this car:"));
+    }
+
+    #[test]
+    fn kona_profile_needs_the_electric_vin_pattern() {
+        assert_eq!(detect("KM8K53AG0LU000001").map(|p| p.id), Some("kona-ev-2020"));
+        assert!(detect("KM8K2CAA3LU123456").is_none(), "gasoline 2020 Kona must not match the EV profile");
+    }
+
+    #[test]
     fn odyssey_misfire_gets_vcm_warranty_note_in_report() {
         let mut a = crate::adapter::Adapter::connect(crate::sim::Sim::new("odyssey-2016").unwrap()).unwrap();
-        let r = crate::report::build(&mut a, None).unwrap();
+        let r = crate::report::build(&mut a, &crate::report::Ident::default()).unwrap();
         let f = r.findings.iter().find(|f| f.code.as_deref() == Some("P0303")).unwrap();
         assert!(f.recommendation.contains("25-061"), "{}", f.recommendation);
+        assert!(f.recommendation.to_lowercase().contains("flashing"), "{}", f.recommendation);
+        assert!(dtc_note(by_id("odyssey-2016").unwrap(), "P0300").is_some_and(|n| !n.contains("25-061")));
+    }
+
+    #[test]
+    fn vin_info_decodes_make_and_model_year() {
+        let i = vin_info("5FNRL5H60GB000001");
+        assert_eq!((i.make, i.model_year, i.check_digit_ok), (Some("Honda"), Some(2016), true));
+        assert_eq!(vin_info("KM8K53AG0LU000001").make, Some("Hyundai"));
+        assert_eq!(vin_info("KM8K53AG0LU000001").model_year, Some(2020));
+        assert_eq!(vin_info("JHLRD78834C000001").model_year, Some(2004));
+        assert_eq!(vin_info("WVWZZZ1JZXW000001").make, None);
     }
 
     #[test]

@@ -2,7 +2,7 @@
 title: Diagnostic thresholds — rules of thumb for interpreting live data
 type: concept
 created: 2026-11-07
-updated: 2026-11-07
+updated: 2026-11-08
 sources:
   - url:https://www.samarins.com/diagnose/p0171.html
   - url:https://apextechnation.com/articles/fuel-trim-diagnostics
@@ -67,9 +67,13 @@ OBD pin 16.
 | | ≤ 12.2 | ~50%; weak or discharged. Charge and load-test. |
 | | ≤ 12.0 | ~25% or less; flat |
 | Engine running | 13.5–14.7 | Charging OK |
-| | < 13.0 | Charging problem likely (alternator, belt, connections) |
+| | 12.6–13.2 | Ambiguous: normal for smart/ELD-controlled charging at light load (Hondas); re-check with headlights and blower on — it should rise above 13.5 V |
+| | < 12.6 | No higher than a resting battery: probably not charging (alternator, belt, connections) |
 | | > 15.0 | Overcharging (regulator) |
 | Cranking | must stay > ~9.6 | Below that → weak battery |
+
+carlink's findings follow this table (2026-11-08): below 12.6 V running is a Warning, 12.6–13.2 V is
+Info with the load re-check, above 15.0 V is a Warning.
 
 **Caveat:** smart-charging systems (the 2016 Odyssey likely has one; `unverified`) deliberately
 run at ~12.5–13.0 V when the battery is full. Do not flag low running voltage on those without

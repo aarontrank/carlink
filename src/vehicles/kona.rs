@@ -9,6 +9,21 @@ use anyhow::Result;
 use std::collections::BTreeMap;
 
 use super::{KnownDtc, Powertrain, Profile, Reset, clear_reset};
+use crate::uds::{Module, Protocol};
+
+/// Diagnostic addresses documented for this car (wiki `kona-ev-other-ecus`). Reply ID = request + 8.
+const MODULES: &[Module] = &[
+    Module { name: "BMS", description: "high-voltage battery management", request: "7E4", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "MCU", description: "drive motor and inverter", request: "7E3", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "VCU", description: "vehicle control unit", request: "7E2", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "OBC", description: "on-board charger and 12 V converter (LDC)", request: "7E5", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "IEB", description: "brakes, ABS and stability control", request: "7D1", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "MDPS", description: "electric power steering", request: "7D4", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "BCM", description: "body control and tire-pressure monitoring (TPMS)", request: "7A0", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "IGPM", description: "body electrics: lights, doors, wipers", request: "770", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "HVAC", description: "heating, air conditioning and heat pump", request: "7B3", protocol: Protocol::Uds, confidence: "verified" },
+    Module { name: "CLUSTER", description: "instrument cluster", request: "7C6", protocol: Protocol::Uds, confidence: "verified" },
+];
 
 pub const PROFILE: Profile = Profile {
     id: "kona-ev-2020",
@@ -28,6 +43,10 @@ pub const PROFILE: Profile = Profile {
         "Cell spread is meaningful only at ≥80% SOC after resting; a 100% AC charge rebalances.",
         "12 V battery is charged by the LDC only while READY/charging (plus Aux Battery Saver+); a dead 12 V prevents READY.",
     ],
+    after_clear: &[
+        "OBD service 04 clears only the motor controller (MCU) and battery management (BMS). Faults in brakes, airbags, TPMS or body modules are in other modules.",
+    ],
+    modules: MODULES,
     known_dtcs: &[
         KnownDtc { code: "P0AA6", note: "HV isolation fault: high-voltage leakage to chassis (often coolant intrusion or a damaged HV connector/cable; on this model also check the battery recall 21V-127 status). Do not attempt repair; have a Hyundai EV-certified dealer inspect. Compare isolation_kohm in carlink history." },
     ],
@@ -38,11 +57,12 @@ pub const PROFILE: Profile = Profile {
         Reset { name: "Service interval reminder", carlink_can_do: false, steps: &["Cluster: User Settings → Service Interval → set/reset distance and months, confirm.", "If not in the cluster menu: head unit Setup → Vehicle → Cluster → Service Interval."], notes: "From Hyundai TSB text, not Kona-specific; confirm on the car." },
         Reset { name: "12 V battery replacement", carlink_can_do: false, steps: &["Nothing to reset. After replacement, check aux_12v in a carlink scan with the car READY (expect ~14 V while the LDC charges)."], notes: "" },
     ],
-    vin: &[("KM8K", 'L')],
+    // Position 8 'G' = battery-electric (NHTSA vPIC); a gasoline 2020 Kona must not get this profile.
+    vin: &[("KM8K", 'L', Some('G'))],
 };
 
 fn r(key: impl Into<String>, name: &'static str, value: f64, unit: &'static str) -> Reading {
-    Reading { key: key.into(), name, value: (value * 100.0).round() / 100.0, unit }
+    Reading::new(key, name, (value * 100.0).round() / 100.0, unit)
 }
 
 fn u16be(p: &[u8], i: usize) -> f64 {
@@ -101,11 +121,15 @@ pub fn decode_0101(p: &[u8]) -> Vec<Reading> {
 pub fn decode_cells(did: u8, p: &[u8]) -> Vec<(u32, f64)> {
     let (first, start, count) = match did {
         0x02 => (1, 4, 32),
-        0x03 => (33, 0, 32),
-        0x04 => (65, 0, 32),
+        0x03 => (33, 4, 32),
+        0x04 => (65, 4, 32),
         0x05 => (97, 34, 2),
         _ => return vec![],
     };
+    // 0102–0104 begin with FF FF FF FF; anything else is not a cell-voltage reply.
+    if did != 0x05 && p.get(..4) != Some(&[0xFF; 4][..]) {
+        return vec![];
+    }
     p.iter().skip(start).take(count).enumerate().map(|(i, &b)| (first + i as u32, b as f64 / 50.0)).collect()
 }
 
@@ -154,6 +178,10 @@ pub fn decode_vmcu_2102(p: &[u8]) -> Vec<Reading> {
     ]
 }
 
+fn hex(s: &str) -> Vec<u8> {
+    (0..s.len() / 2).filter_map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).ok()).collect()
+}
+
 const REQUESTS: &[(&str, &[&str])] = &[
     ("7E4", &["220101", "220102", "220103", "220104", "220105"]),
     ("7E2", &["2102"]),
@@ -167,9 +195,14 @@ fn payloads<T: Transport>(a: &mut Adapter<T>, header: &str, reqs: &[&str]) -> Re
         Ok(reqs
             .iter()
             .map(|req| {
-                let hdr = if req.starts_with("21") { 2 } else { 3 };
-                let ok = 0x40 + u8::from_str_radix(&req[..2], 16)?;
-                Ok(a.query(req)?.into_iter().find(|m| m.data.first() == Some(&ok)).map(|m| m.data[hdr.min(m.data.len())..].to_vec()))
+                // The positive reply echoes the service (+0x40) and the identifier, e.g. 62 01 01 for 220101.
+                let mut echo = hex(req);
+                echo[0] += 0x40;
+                let msgs = a.query(req)?;
+                if let Some((_, nrc)) = msgs.iter().find_map(|m| crate::uds::negative(&m.data)) {
+                    anyhow::bail!("refused: {}", crate::actions::nrc_meaning(nrc));
+                }
+                Ok(msgs.into_iter().find(|m| m.data.starts_with(&echo)).map(|m| m.data[echo.len()..].to_vec()))
             })
             .collect())
     })
@@ -189,6 +222,21 @@ fn decode(req: &str, p: &[u8], out: &mut Vec<Reading>, cells: &mut Vec<(u32, f64
     }
 }
 
+/// Keys `bms_live` can produce, i.e. what `watch` may sample on this car.
+pub const LIVE_KEYS: &[&str] = &[
+    "soc_bms", "pack_voltage", "pack_current", "batt_temp_max", "batt_temp_min", "inlet_temp", "cell_v_max",
+    "cell_v_min", "aux_12v_bms", "avail_charge_kw", "avail_discharge_kw", "isolation_kohm",
+];
+
+/// One BMS 220101 read, for live sampling.
+pub fn bms_live<T: Transport>(a: &mut Adapter<T>) -> Result<Vec<Reading>> {
+    match payloads(a, "7E4", &["220101"])?.pop() {
+        Some(Ok(Some(p))) => Ok(decode_0101(&p)),
+        Some(Err(e)) => Err(e),
+        _ => anyhow::bail!("the battery management module did not answer"),
+    }
+}
+
 /// All Kona-specific reads. Each failure is reported, the rest continue.
 pub fn read<T: Transport>(a: &mut Adapter<T>) -> (Vec<Reading>, Vec<String>) {
     let mut out = Vec::new();
@@ -199,7 +247,13 @@ pub fn read<T: Transport>(a: &mut Adapter<T>) -> (Vec<Reading>, Vec<String>) {
             Ok(results) => {
                 for (req, res) in reqs.iter().zip(results) {
                     match res {
-                        Ok(Some(p)) => decode(req, &p, &mut out, &mut cells),
+                        Ok(Some(p)) => {
+                            let (readings, cell_count) = (out.len(), cells.len());
+                            decode(req, &p, &mut out, &mut cells);
+                            if out.len() == readings && cells.len() == cell_count {
+                                errors.push(format!("{header} {req}: reply too short or malformed ({} bytes)", p.len()));
+                            }
+                        }
                         Ok(None) => errors.push(format!("{header} {req}: no response")),
                         Err(e) => errors.push(format!("{header} {req}: {e}")),
                     }
@@ -208,13 +262,33 @@ pub fn read<T: Transport>(a: &mut Adapter<T>) -> (Vec<Reading>, Vec<String>) {
             Err(e) => errors.push(format!("{header}: {e}")),
         }
     }
-    if cells.len() == 98 {
-        let max = cells.iter().map(|c| c.1).fold(f64::MIN, f64::max);
-        let min = cells.iter().map(|c| c.1).fold(f64::MAX, f64::min);
-        out.push(r("cell_delta_v", "Cell voltage spread (max − min, all 98)", max - min, "V"));
+    match cell_spread(&cells, &out) {
+        Ok(spread) => {
+            out.push(r("cell_delta_v", "Cell voltage spread (max − min, all 98)", spread, "V"));
+            out.extend(cells.into_iter().map(|(n, v)| r(format!("cell_v_{n:02}"), "Cell voltage", v, "V")));
+        }
+        Err(e) if !cells.is_empty() => errors.push(format!("cell voltages not used: {e}")),
+        Err(_) => {}
     }
-    out.extend(cells.into_iter().map(|(n, v)| r(format!("cell_v_{n:02}"), "Cell voltage", v, "V")));
     (out, errors)
+}
+
+/// Max − min over all 98 cells, only when every cell is plausible and the extremes agree (±0.02 V,
+/// one count) with the BMS's own max/min from 220101. Otherwise the cell data is not trusted at all.
+pub fn cell_spread(cells: &[(u32, f64)], summary: &[Reading]) -> std::result::Result<f64, String> {
+    if cells.len() != 98 {
+        return Err(format!("{} of 98 cells read", cells.len()));
+    }
+    if let Some((n, v)) = cells.iter().find(|c| !(2.5..=4.3).contains(&c.1)) {
+        return Err(format!("implausible voltage {v:.2} V for cell {n}"));
+    }
+    let max = cells.iter().map(|c| c.1).fold(f64::MIN, f64::max);
+    let min = cells.iter().map(|c| c.1).fold(f64::MAX, f64::min);
+    let close = |key: &str, v: f64| get(summary, key).is_none_or(|s| (s - v).abs() <= 0.021);
+    if !close("cell_v_max", max) || !close("cell_v_min", min) {
+        return Err(format!("cell readings ({min:.2}–{max:.2} V) disagree with the BMS summary"));
+    }
+    Ok(((max - min) * 100.0).round() / 100.0)
 }
 
 fn get(rs: &[Reading], key: &str) -> Option<f64> {
@@ -279,8 +353,8 @@ pub fn sim_data() -> Vec<(u16, &'static str, Vec<u8>)> {
     vec![
         (0x7EC, "220101", d0101),
         (0x7EC, "220102", cells(0x02, 4, 32)),
-        (0x7EC, "220103", cells(0x03, 0, 32)),
-        (0x7EC, "220104", cells(0x04, 0, 32)),
+        (0x7EC, "220103", cells(0x03, 4, 32)),
+        (0x7EC, "220104", cells(0x04, 4, 32)),
         (0x7EC, "220105", d0105),
         (0x7EA, "2102", vmcu),
         (0x7A8, "22C00B", tpms),
@@ -356,9 +430,44 @@ mod tests {
         assert_eq!(c.len(), 32);
         assert_eq!((c[0].0, c[0].1), (1, 3.02));
         assert_eq!((c[31].0, c[31].1), (32, 3.64));
-        let p3: Vec<u8> = (0..32).map(|_| 180).collect();
-        assert_eq!(decode_cells(0x03, &p3)[0].0, 33);
-        assert_eq!(decode_cells(0x04, &p3)[31].0, 96);
+    }
+
+    fn hexs(s: &str) -> Vec<u8> {
+        (0..s.len() / 2).map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).unwrap()).collect()
+    }
+
+    #[test]
+    fn cells_33_to_96_start_after_the_ff_prefix_like_0102() {
+        // evDash's real 220103 / 220104 samples (wiki kona-ev-bms-pids), header 62 01 0x stripped
+        let p3 = hexs("FFFFFFFFCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCACBCACACFCCCBCBCBCBCBCBCBCBAAAA");
+        let c = decode_cells(0x03, &p3);
+        assert_eq!(c.len(), 32);
+        assert_eq!((c[0].0, c[0].1), (33, 4.06));
+        assert_eq!((c[18].0, c[18].1), (51, 4.04));
+        assert_eq!((c[22].0, c[22].1), (55, 4.14));
+        assert_eq!(c[31].0, 64);
+        let p4 = hexs("FFFFFFFFCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBAAAA");
+        assert_eq!(decode_cells(0x04, &p4).iter().map(|c| c.0).collect::<Vec<_>>(), (65..=96).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn cell_reply_without_the_ff_prefix_is_rejected() {
+        let p = hexs("00FFFFFFCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCBCB");
+        assert!(decode_cells(0x02, &p).is_empty());
+    }
+
+    #[test]
+    fn implausible_or_inconsistent_cells_give_no_spread() {
+        let ok = |n: u32| (n, 3.60);
+        let mut cells: Vec<(u32, f64)> = (1..=98).map(ok).collect();
+        let summary = |max: f64, min: f64| vec![Reading::new("cell_v_max", "", max, "V"), Reading::new("cell_v_min", "", min, "V")];
+        assert_eq!(cell_spread(&cells, &summary(3.60, 3.60)), Ok(0.0));
+        cells[40].1 = 5.10;
+        assert!(cell_spread(&cells, &summary(3.60, 3.60)).unwrap_err().contains("implausible"));
+        cells[40].1 = 3.40;
+        assert!(cell_spread(&cells, &summary(3.60, 3.60)).unwrap_err().contains("disagree"));
+        assert_eq!(cell_spread(&cells, &summary(3.60, 3.40)), Ok(0.2));
+        assert!(cell_spread(&cells[..97], &summary(3.60, 3.40)).is_err());
     }
 
     #[test]
@@ -395,20 +504,43 @@ mod tests {
     }
 
     #[test]
+    fn reply_for_a_different_identifier_is_not_decoded() {
+        let mut sim = crate::sim::Sim::new("kona-ev-2020").unwrap();
+        // a late 220101 reply arriving as the answer to 220102
+        sim.inject("220102", "7EC 10 3E 62 01 01 FF F7 E7\r7EC 21 FF 49 00 00 00 00 80\r7EC 22 00 00 0D D9 09 09 08\r7EC 23 08 09 08 00 00 07 B4\r7EC 24 02 B4 01 00 00 7E 00\r7EC 25 00 DB 54 00 00 D9 15\r7EC 26 00 00 52 59 00 00 4F\r7EC 27 57 00 7B 02 13 00 00\r7EC 28 00 00 00 00 00 0B B8");
+        let mut a = crate::adapter::Adapter::connect(sim).unwrap();
+        let (readings, errors) = read(&mut a);
+        assert!(errors.iter().any(|e| e.contains("220102")), "{errors:?}");
+        assert!(!readings.iter().any(|r| r.key == "cell_v_01"));
+        assert!(!readings.iter().any(|r| r.key == "cell_delta_v"));
+    }
+
+    #[test]
+    fn refused_and_short_replies_are_reported_as_such() {
+        let mut sim = crate::sim::Sim::new("kona-ev-2020").unwrap();
+        sim.inject("22C00B", "7A8 03 7F 22 31");
+        sim.inject("22B002", "7CE 04 62 B0 02 00");
+        let mut a = crate::adapter::Adapter::connect(sim).unwrap();
+        let (_, errors) = read(&mut a);
+        assert!(errors.iter().any(|e| e.contains("22C00B") && e.contains("out of range")), "{errors:?}");
+        assert!(errors.iter().any(|e| e.contains("22B002") && e.contains("too short")), "{errors:?}");
+    }
+
+    #[test]
     fn findings_from_battery_health() {
-        let cells = |spread: f64| vec![Reading { key: "cell_delta_v".into(), name: "", value: spread, unit: "V" }, Reading { key: "soc_display".into(), name: "", value: 85.0, unit: "%" }];
+        let cells = |spread: f64| vec![Reading::new("cell_delta_v", "", spread, "V"), Reading::new("soc_display", "", 85.0, "%")];
         let sev = |rs: Vec<Reading>| findings(&rs).into_iter().map(|f| f.severity).collect::<Vec<_>>();
         assert!(sev(cells(0.02)).is_empty());
         assert_eq!(sev(cells(0.04)), vec![Severity::Advice]);
         assert_eq!(sev(cells(0.06)), vec![Severity::Warning]);
         assert_eq!(sev(cells(0.10)), vec![Severity::Critical]);
-        let low_soc = vec![Reading { key: "cell_delta_v".into(), name: "", value: 0.10, unit: "V" }, Reading { key: "soc_display".into(), name: "", value: 15.0, unit: "%" }];
+        let low_soc = vec![Reading::new("cell_delta_v", "", 0.10, "V"), Reading::new("soc_display", "", 15.0, "%")];
         assert_eq!(sev(low_soc), vec![Severity::Info]);
-        let soh = |v: f64| vec![Reading { key: "soh".into(), name: "", value: v, unit: "%" }];
+        let soh = |v: f64| vec![Reading::new("soh", "", v, "%")];
         assert!(sev(soh(95.0)).is_empty());
         assert_eq!(sev(soh(85.0)), vec![Severity::Advice]);
         assert_eq!(sev(soh(78.0)), vec![Severity::Warning]);
-        let aux = vec![Reading { key: "aux_12v".into(), name: "", value: 11.8, unit: "V" }];
+        let aux = vec![Reading::new("aux_12v", "", 11.8, "V")];
         assert_eq!(sev(aux), vec![Severity::Warning]);
     }
 }

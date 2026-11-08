@@ -1,6 +1,6 @@
 //! Turns ELM327/STN response text (headers on, spaces on) into per-ECU messages.
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -38,6 +38,20 @@ const ERRORS: &[&str] = &[
     "UART RX OVERFLOW", "ERR",
 ];
 
+/// A status line the adapter printed instead of (or among) data, e.g. `CAN ERROR` or `LV RESET`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterError {
+    pub line: String,
+}
+
+impl std::fmt::Display for AdapterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "adapter error: {}", self.line)
+    }
+}
+
+impl std::error::Error for AdapterError {}
+
 fn hex_bytes(tokens: &[&str]) -> Option<Vec<u8>> {
     tokens.iter().map(|t| u8::from_str_radix(t, 16).ok()).collect()
 }
@@ -46,6 +60,8 @@ struct Pending {
     ecu: String,
     len: usize,
     data: Vec<u8>,
+    next_seq: u8,
+    broken: bool,
 }
 
 pub fn parse_response(raw: &str, bus: Bus) -> Result<Vec<Message>> {
@@ -57,7 +73,7 @@ pub fn parse_response(raw: &str, bus: Bus) -> Result<Vec<Message>> {
         }
         let line = line.strip_prefix("BUS INIT: ...OK").unwrap_or(line).trim();
         if line == "?" || ERRORS.iter().any(|e| line.starts_with(e)) {
-            bail!("adapter error: {line}");
+            return Err(AdapterError { line: line.to_string() }.into());
         }
         let tokens: Vec<&str> = line.split_whitespace().collect();
         let header_len = match bus {
@@ -70,9 +86,20 @@ pub fn parse_response(raw: &str, bus: Bus) -> Result<Vec<Message>> {
         }
         let Some(bytes) = hex_bytes(&tokens[header_len..]) else { continue };
         if bus == Bus::Legacy {
+            if !matches!(tokens[1], "6B" | "F1") {
+                return Err(AdapterError { line: format!("UNEXPECTED REPLY FORMAT: {line}") }.into());
+            }
             let ecu = tokens[2].to_string();
             out.push(Message { ecu, data: bytes[..bytes.len() - 1].to_vec() });
             continue;
+        }
+        let header_ok = match bus {
+            Bus::Can11 => tokens[0].len() == 3 && u16::from_str_radix(tokens[0], 16).is_ok_and(|id| id <= 0x7FF),
+            Bus::Can29 => tokens[0] == "18" && matches!(tokens[1], "DA" | "DB"),
+            Bus::Legacy => true,
+        };
+        if !header_ok {
+            return Err(AdapterError { line: format!("UNEXPECTED REPLY FORMAT: {line}") }.into());
         }
         let ecu = tokens[..header_len].concat();
         let pci = bytes[0];
@@ -85,18 +112,23 @@ pub fn parse_response(raw: &str, bus: Bus) -> Result<Vec<Message>> {
                 let len = (((pci & 0x0F) as usize) << 8) | bytes[1] as usize;
                 out.push(Message { ecu: ecu.clone(), data: Vec::new() });
                 pending.retain(|p| p.ecu != ecu);
-                pending.push(Pending { ecu, len, data: bytes[2..].to_vec() });
+                pending.push(Pending { ecu, len, data: bytes[2..].to_vec(), next_seq: 1, broken: false });
             }
             2 => {
                 if let Some(p) = pending.iter_mut().find(|p| p.ecu == ecu) {
+                    p.broken |= pci & 0x0F != p.next_seq;
+                    p.next_seq = (p.next_seq + 1) % 16;
                     p.data.extend_from_slice(&bytes[1..]);
                 }
             }
             _ => {}
         }
     }
-    // Fill each multi-frame placeholder (kept in arrival order) with its reassembled payload.
     for p in pending {
+        if p.broken || p.data.len() < p.len {
+            anyhow::bail!("incomplete multi-frame response from {} ({} of {} bytes; a frame was lost)", p.ecu, p.data.len().min(p.len), p.len);
+        }
+        // The placeholder pushed at the first frame keeps this message in arrival order.
         if let Some(m) = out.iter_mut().find(|m| m.ecu == p.ecu && m.data.is_empty()) {
             m.data = p.data.into_iter().take(p.len).collect();
         }
@@ -133,6 +165,41 @@ mod tests {
         assert_eq!(r[0].data.len(), 0x14);
         assert_eq!(&r[0].data[..3], &[0x49, 0x02, 0x01]);
         assert_eq!(&r[0].data[3..], b"5J6RD18294L123456");
+    }
+
+    #[test]
+    fn lost_consecutive_frame_is_an_error_not_shifted_data() {
+        // frame 22 missing: the payload would otherwise be 7 bytes short with every later offset shifted
+        let raw = "7EC 10 14 62 01 01 FF F7 E7\r7EC 21 FF 49 00 00 00 00 80\r7EC 23 08 09 08 00 00 07 B4\r";
+        let err = parse_response(raw, Bus::Can11).unwrap_err().to_string();
+        assert!(err.contains("7EC") && err.contains("incomplete"), "{err}");
+    }
+
+    #[test]
+    fn truncated_multi_frame_is_an_error() {
+        let err = parse_response("7E8 10 14 49 02 01 35 4A 36\r7E8 21 52 44 31 38 32 39\r", Bus::Can11).unwrap_err().to_string();
+        assert!(err.contains("incomplete"), "{err}");
+    }
+
+    #[test]
+    fn sequence_number_wraps_after_f() {
+        let mut raw = String::from("7EC 10 76 62 01 02 FF FF FF\r");
+        for i in 1..=16u8 {
+            raw.push_str(&format!("7EC 2{:X} 01 02 03 04 05 06 07\r", i % 16));
+        }
+        let r = parse_response(&raw, Bus::Can11).unwrap();
+        assert_eq!(r[0].data.len(), 0x76);
+    }
+
+    #[test]
+    fn consecutive_frame_without_first_frame_is_ignored() {
+        assert_eq!(parse_response("7E8 21 01 02 03\r7E8 03 41 05 7B\r", Bus::Can11).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn adapter_error_is_typed() {
+        let err = parse_response("LV RESET\r>", Bus::Can11).unwrap_err();
+        assert_eq!(err.downcast_ref::<AdapterError>().map(|e| e.line.as_str()), Some("LV RESET"));
     }
 
     #[test]
@@ -206,6 +273,16 @@ mod tests {
     fn response_pending_is_dropped_in_favor_of_final_answer() {
         let r = parse_response("7EC 03 7F 22 78\r7EC 04 62 01 01 AA\r", Bus::Can11).unwrap();
         assert_eq!(r, vec![msg("7EC", &[0x62, 0x01, 0x01, 0xAA])]);
+    }
+
+    #[test]
+    fn reply_without_headers_is_flagged_as_a_possible_adapter_reset() {
+        // after a reboot the adapter prints headers off: "43 02 03 03 34 00" would otherwise be ECU "43"
+        let err = parse_response("43 02 03 03 34 00\r", Bus::Can11).unwrap_err();
+        assert!(err.downcast_ref::<AdapterError>().unwrap().line.starts_with("UNEXPECTED REPLY FORMAT"));
+        assert!(parse_response("41 0C 1A F8 22\r", Bus::Legacy).is_err());
+        assert!(parse_response("18 DA F1 10 03 41 05 7B\r", Bus::Can29).is_ok());
+        assert!(parse_response("6F8 04 62 01 01 AA\r", Bus::Can11).is_ok());
     }
 
     #[test]
