@@ -48,3 +48,9 @@ procedures. Code cites the page a byte offset or threshold comes from.
 simulator can inject adapter faults and odd replies. There is no CI: run `cargo test` and
 `cargo clippy --all-targets` before committing. Decisions are logged in `DECISIONS.md`; the review
 findings of the 2026-11-08 hardening pass are in `docs/review-2026-11-08.md`.
+
+## License
+
+MIT (`LICENSE`) for carlink's own code and documentation. `data/dtc-generic.csv` is OBDex's CC0 data
+(`data/DTC-LICENSE.md`). The files in `kb/raw/` are copies of third-party sources kept for reference;
+they stay under their owners' terms.
