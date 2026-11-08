@@ -323,5 +323,9 @@ Never present simulator output as the person's car (rule 6).
 
 ## If the real car disagrees with this skill
 
-Do not edit carlink or its knowledge base during a job. Tell the person what differed (e.g. "the van
-answered on a different address", "this code meant X here") so the maintainer can record it.
+Do not edit carlink or its knowledge base during a job. Run the command that surprised you once more
+with `--trace <file>` added (e.g. `--trace ~/carlink-trace.txt`; add `--no-save` if it is `scan`, so
+the visit is not saved twice) — never re-run `clear` — and tell the person
+where the file is: it records exactly what the car said, and it contains the VIN. Tell them what
+differed (e.g. "the van answered on a different address", "this code meant X here") so the maintainer
+can record it.

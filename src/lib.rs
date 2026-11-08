@@ -15,3 +15,4 @@ pub mod uds;
 pub mod watch;
 pub mod probe;
 pub mod mode06;
+pub mod trace;

@@ -54,6 +54,7 @@ are in the repo's `DECISIONS.md`.
 ## Not yet verified on the real cars
 
 Everything above runs against the built-in simulator, which models adapter faults and the module
-behaviours observed in third-party captures. The first real sessions should confirm, per car:
+behaviours observed in third-party captures. `--trace <file>` records every request and raw reply, and
+the repository's `docs/first-real-session.md` is the per-car checklist. The first real sessions should confirm, per car:
 protocol (Odyssey 11- or 29-bit), responding ECUs, whether the explicit flow control and `ATAR`
 restore behave as documented, and the Kona rear TPMS order.

@@ -18,7 +18,7 @@ fn run(e: &Env, args: &[&str]) -> (bool, Value) {
 }
 
 fn run_code(e: &Env, args: &[&str]) -> (i32, Value) {
-    let out = Command::new(env!("CARGO_BIN_EXE_carlink")).args(["--db", &e.db]).args(args).env_remove("CARLINK_PORT").output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_carlink")).args(["--db", &e.db]).args(args).env_remove("CARLINK_PORT").env_remove("CARLINK_TRACE").output().unwrap();
     let v = serde_json::from_slice(&out.stdout).unwrap_or_else(|_| panic!("not JSON: {}", String::from_utf8_lossy(&out.stdout)));
     (out.status.code().unwrap_or(-1), v)
 }
@@ -52,7 +52,7 @@ fn scan_saves_session_keyed_by_vin_and_history_reads_it_back() {
 #[test]
 fn scan_output_starts_with_the_summary() {
     let e = env();
-    let out = Command::new(env!("CARGO_BIN_EXE_carlink")).args(["--db", &e.db, "--port", "sim:odyssey-2016", "scan"]).output().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_carlink")).args(["--db", &e.db, "--port", "sim:odyssey-2016", "scan"]).env_remove("CARLINK_TRACE").output().unwrap();
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(text.trim_start().starts_with("{\n  \"summary\""), "{}", &text[..80]);
 }
@@ -122,6 +122,40 @@ fn a_29_bit_odyssey_clear_can_be_rehearsed() {
     let (ok, r) = run(&e, &["--port", "sim:odyssey-2016:can29:engine-off", "clear", "--confirm-clear-codes"]);
     assert!(ok, "{r}");
     assert_eq!(r["clear_status"], "cleared", "{r}");
+}
+
+#[test]
+fn trace_records_the_adapter_traffic() {
+    let e = env();
+    let trace = e._dir.path().join("trace.log");
+    let (ok, r) = run(&e, &["--port", "sim:crv-2004", "--trace", trace.to_str().unwrap(), "probe"]);
+    assert!(ok, "{r}");
+    let log = std::fs::read_to_string(&trace).unwrap();
+    assert!(log.contains("> ATI") && log.contains("> 0100"), "{log}");
+}
+
+#[test]
+fn a_trace_header_survives_an_argument_that_is_not_utf8() {
+    use std::os::unix::ffi::OsStrExt;
+    let e = env();
+    let trace = e._dir.path().join("trace.log");
+    let db = std::ffi::OsStr::from_bytes(b"/nonexistent/h\xff.db");
+    let out = Command::new(env!("CARGO_BIN_EXE_carlink"))
+        .arg("--db")
+        .arg(db)
+        .args(["--port", "sim:crv-2004", "--trace", trace.to_str().unwrap(), "probe"])
+        .env_remove("CARLINK_PORT")
+        .env_remove("CARLINK_TRACE")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
+fn a_trace_that_cannot_be_opened_does_not_stop_the_command() {
+    let e = env();
+    let (ok, r) = run(&e, &["--port", "sim:crv-2004", "--trace", "/nonexistent-dir/trace.log", "probe"]);
+    assert!(ok, "{r}");
 }
 
 #[test]

@@ -20,6 +20,9 @@ struct Cli {
     /// History database. Default: ~/.local/share/carlink/carlink.db
     #[arg(long, global = true, env = "CARLINK_DB")]
     db: Option<PathBuf>,
+    /// Append every request sent to the adapter and its raw reply to this file (commands that talk to the adapter), to report a car that behaves differently from what carlink expects. It contains the car's VIN.
+    #[arg(long, global = true, env = "CARLINK_TRACE")]
+    trace: Option<PathBuf>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -170,8 +173,9 @@ enum HistoryCmd {
     },
 }
 
-fn transport(port: Option<&str>) -> Result<Box<dyn Transport>> {
-    Ok(match port {
+fn transport(port: Option<&str>, trace: Option<&std::path::Path>) -> Result<Box<dyn Transport>> {
+    let trace_file = trace.and_then(carlink::trace::open);
+    let t: Box<dyn Transport> = match port {
         Some(p) if p.starts_with("sim:") => Box::new(sim::Sim::from_spec(&p[4..]).map_err(|e| problem("bad_input", e.to_string(), "Use `sim:<vehicle>` with a vehicle listed by `carlink ports`, plus only the faults that `carlink --help` names under --port."))?),
         Some(p) => Box::new(serial::open(p)?),
         None => {
@@ -180,11 +184,15 @@ fn transport(port: Option<&str>) -> Result<Box<dyn Transport>> {
             })?;
             Box::new(serial::open(&p)?)
         }
+    };
+    Ok(match trace_file {
+        Some(file) => Box::new(carlink::trace::Trace::new(t, file, &std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned()).collect::<Vec<_>>().join(" "))),
+        None => t,
     })
 }
 
-fn connect(port: Option<&str>) -> Result<Adapter<Box<dyn Transport>>> {
-    Adapter::connect(transport(port)?)
+fn connect(port: Option<&str>, trace: Option<&std::path::Path>) -> Result<Adapter<Box<dyn Transport>>> {
+    Adapter::connect(transport(port, trace)?)
 }
 
 /// The real history, or — when the simulator is in use and no --db was given — a separate practice file,
@@ -225,6 +233,7 @@ fn checked_vin(vin: Option<&str>, no_check: bool) -> Result<Option<String>> {
 
 fn run(cli: Cli) -> Result<Value> {
     let port = cli.port.as_deref();
+    let trace = cli.trace.as_deref();
     Ok(match cli.cmd {
         Cmd::Ports => {
             let c = serial::candidates();
@@ -235,7 +244,7 @@ fn run(cli: Cli) -> Result<Value> {
             })
         }
         Cmd::Probe => {
-            let p = carlink::probe::probe(transport(port)?);
+            let p = carlink::probe::probe(transport(port, trace)?);
             let mut v = json!(p);
             if let Some(first) = p.checks.iter().find(|c| !c.ok && c.name != "vin") {
                 v["error"] = json!(format!("{}: {}", first.name, first.detail));
@@ -250,7 +259,7 @@ fn run(cli: Cli) -> Result<Value> {
             profile(vehicle.as_deref())?;
             let vin = checked_vin(vin.as_deref(), vin_no_check)?;
             let db = if no_save { None } else { Some(store(cli.db, port)?) };
-            let mut a = connect(port)?;
+            let mut a = connect(port, trace)?;
             let r = report::build(&mut a, &Ident { vehicle: vehicle.as_deref(), vin: vin.as_deref() })?;
             let session_id = match (db, &r.vehicle_key) {
                 (Some(db), Some(_)) => Some(report::save(&db, &r, "scan", odometer_mi, note)?),
@@ -271,12 +280,12 @@ fn run(cli: Cli) -> Result<Value> {
             profile(vehicle.as_deref())?;
             let vin = checked_vin(vin.as_deref(), vin_no_check)?;
             let db = store(cli.db, port)?;
-            let mut a = connect(port)?;
+            let mut a = connect(port, trace)?;
             actions::clear_with_history(&mut a, &db, &Ident { vehicle: vehicle.as_deref(), vin: vin.as_deref() }, &only, note)?
         }
         Cmd::Watch { vehicle, keys, samples, interval_ms } => {
             let flagged = profile(vehicle.as_deref())?;
-            let mut a = connect(port)?;
+            let mut a = connect(port, trace)?;
             let p = flagged.or_else(|| carlink::scan::vin(&mut a).ok().flatten().as_deref().and_then(vehicles::detect));
             let mut v = json!(carlink::watch::watch(&mut a, p, &keys, samples, std::time::Duration::from_millis(interval_ms))?);
             v["simulated"] = json!(a.info().simulated);
@@ -284,7 +293,7 @@ fn run(cli: Cli) -> Result<Value> {
         }
         Cmd::Tests { vehicle } => {
             let flagged = profile(vehicle.as_deref())?;
-            let mut a = connect(port)?;
+            let mut a = connect(port, trace)?;
             let p = flagged.or_else(|| carlink::scan::vin(&mut a).ok().flatten().as_deref().and_then(vehicles::detect));
             let t = carlink::mode06::read(&mut a, p.map(|p| p.id))?;
             let mut v = json!(t);
@@ -311,7 +320,7 @@ fn run(cli: Cli) -> Result<Value> {
             {
                 return Err(problem("bad_input", format!("header must be 3 hex digits (11-bit CAN), got '{h}'"), "Pass an 11-bit request ID such as 7E4, or leave --header out."));
             }
-            let mut a = connect(port)?;
+            let mut a = connect(port, trace)?;
             let msgs = match header {
                 Some(h) => a.with_header(&h, |a| a.query(&req))?,
                 None => a.query(&req)?,

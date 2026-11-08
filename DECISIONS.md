@@ -186,6 +186,17 @@ problems and reset errors. The skill must work even for less capable agents.
   get you through the inspection", and the post-clear message. The remaining confusions were wording
   (review T18–T20), so the trials stop here.
 
+### Phase 8 — ready for the first real session
+- **D49. `--trace <file>` records the raw adapter traffic** (every request, its raw reply or error, and
+  how long it took), as a transport wrapper: no protocol code changes, and a trace that cannot be
+  written never stops a diagnosis. The skill tells agents to re-run a surprising command (never `clear`)
+  with it. `docs/first-real-session.md` turns O1, O7 and O10 into per-car steps.
+- **D50. Review rounds on `--trace` stop at round 17 (stopping rule).** Rounds 16 and 17 both found
+  problems caused by my own fixes to how the trace file is opened. Re-scoped by removal: a new file is
+  created `0600` in one step, an existing file is never chmod-ed, and a file that cannot be opened is
+  skipped with a stderr warning — the same "a trace never stops a diagnosis" rule as a failed write.
+  Residuals: review K76.
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and

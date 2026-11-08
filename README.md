@@ -20,7 +20,9 @@ carlink history vehicles                       # then: history dtcs|trend|compar
 carlink --port sim:kona-ev-2020 scan           # built-in simulator, no car needed
 ```
 
-Every failure is JSON with `error`, `error_kind` and `what_to_do`. History is kept per VIN in
+Every failure is JSON with `error`, `error_kind` and `what_to_do`. `--trace <file>` on a command that talks
+to the adapter records the raw traffic; `docs/first-real-session.md` is the checklist for the first session on
+each real car (nothing has run on real hardware yet). History is kept per VIN in
 `~/.local/share/carlink/carlink.db` (simulator runs go to `simulator.db`).
 
 ## Knowledge base
