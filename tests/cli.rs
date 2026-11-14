@@ -297,7 +297,7 @@ fn probe_failure_names_the_broken_link_and_exits_non_zero() {
 fn vehicles_and_resets_list_profiles() {
     let e = env();
     let (_, v) = run(&e, &["vehicles"]);
-    assert_eq!(v.as_array().unwrap().len(), 3);
+    assert_eq!(v.as_array().unwrap().len(), 4);
     let (ok, r) = run(&e, &["resets", "--vehicle", "kona-ev-2020"]);
     assert!(ok);
     assert!(r["resets"].as_array().unwrap().iter().any(|x| x["carlink_can_do"] == true));
@@ -367,4 +367,23 @@ fn watch_samples_and_summarises() {
     let (ok, r) = run(&e, &["--port", "sim:kona-ev-2020", "watch", "--vehicle", "kona-ev-2020", "--samples", "1", "--interval-ms", "0"]);
     assert!(ok, "{r}");
     assert!(r["stats"]["pack_voltage"]["last"].as_f64().is_some(), "{r}");
+}
+
+#[test]
+fn a_clarity_scan_end_to_end_reads_the_battery_and_saves_by_vin() {
+    let e = env();
+    let (ok, v) = run(&e, &["--port", "sim:clarity-phev-2018", "scan"]);
+    assert!(ok, "{v}");
+    assert_eq!(v["vehicle"]["id"], "clarity-phev-2018");
+    assert_eq!(v["vehicle"]["powertrain"], "plug_in_hybrid");
+    assert!(v["extended"].as_array().unwrap().iter().any(|r| r["key"] == "hv_capacity_ah"));
+    assert!(v["session_id"].is_i64(), "the car reports its VIN, so the scan is saved");
+}
+
+#[test]
+fn raw_reads_a_29_bit_module_by_its_header() {
+    let e = env();
+    let (ok, r) = run(&e, &["--port", "sim:clarity-phev-2018", "raw", "22202a", "--header", "18da01f1"]);
+    assert!(ok, "{r}");
+    assert_eq!(r["messages"][0]["ecu"], "18DAF101");
 }

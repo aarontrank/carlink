@@ -26,6 +26,6 @@ pub fn find(e: &anyhow::Error) -> Option<&Problem> {
     e.chain().find_map(|c| c.downcast_ref::<Problem>())
 }
 
-pub const CHECK_IGNITION: &str = "Turn the ignition ON (engine running, or the Kona in READY) and run the command again. If it still fails, push the adapter firmly into the car's OBD port (under the dashboard, driver side).";
+pub const CHECK_IGNITION: &str = "Turn the ignition ON (engine running, or the Kona or Clarity in READY) and run the command again. If it still fails, push the adapter firmly into the car's OBD port (under the dashboard, driver side).";
 pub const GIVE_VIN: &str = "Read the VIN from the windshield (driver's side, bottom corner) or the driver's door jamb and pass it with --vin.";
 pub const CHECK_USB: &str = "Plug the OBDLink EX into this computer's USB port and into the car's OBD port (under the dashboard, driver side), then run `carlink ports`.";

@@ -33,6 +33,7 @@ pub const PROFILE: Profile = Profile {
     ],
     modules: &[],
     obd_clear_refused: None,
+    kept_codes: (&[], ""),
     known_dtcs: &[
         KnownDtc { code: "P1457", note: "EVAP leak at the canister side: usually the canister vent shut valve or a clogged purge line (Honda bulletin 08-016). Replace the valve, then smoke-test the EVAP system. Not urgent to drive." },
         KnownDtc { code: "P2646", note: "VTEC oil pressure switch reports wrong state (bulletin 13-021). Check oil level and condition first; then replace the switch (37250-PNE-G01). Safe to drive short-term." },

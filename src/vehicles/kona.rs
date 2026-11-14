@@ -8,7 +8,7 @@ use crate::obd::Reading;
 use anyhow::Result;
 use std::collections::BTreeMap;
 
-use super::{KnownDtc, Powertrain, Profile, Reset};
+use super::{KnownDtc, Powertrain, Profile, Reset, payloads};
 use crate::uds::{Module, Protocol};
 
 /// Modules observed answering on a 1st-generation Kona Electric (wiki `kona-ev-modules`); reply ID =
@@ -54,6 +54,7 @@ pub const PROFILE: Profile = Profile {
     after_clear: &[],
     modules: MODULES,
     obd_clear_refused: Some("on the Kona Electric, OBD service 04 is answered by the battery management module (BMS), and Hyundai's battery campaign 9A4 (TSB 23-01-073H-1) decides on pack replacement from the codes it stores; clearing them destroys that evidence"),
+    kept_codes: (&[], ""),
     known_dtcs: &[
         KnownDtc { code: "P0AA6", note: "HV isolation fault: high-voltage leakage to chassis (often coolant intrusion or a damaged HV connector/cable; on this model also check the battery recall 21V-127 status). Do not attempt repair; have a Hyundai EV-certified dealer inspect. Compare isolation_kohm in carlink history." },
     ],
@@ -195,35 +196,12 @@ pub fn decode_vmcu_2102(p: &[u8]) -> Vec<Reading> {
     ]
 }
 
-fn hex(s: &str) -> Vec<u8> {
-    (0..s.len() / 2).filter_map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).ok()).collect()
-}
-
 const REQUESTS: &[(&str, &[&str])] = &[
     ("7E4", &["220101", "220102", "220103", "220104", "220105"]),
     ("7E2", &["2102"]),
     ("7A0", &["22C00B"]),
     ("7C6", &["22B002"]),
 ];
-
-/// Positive-response payloads (after the 62 xx xx / 61 xx header) for each request to one ECU.
-fn payloads<T: Transport>(a: &mut Adapter<T>, header: &str, reqs: &[&str]) -> Result<Vec<Result<Option<Vec<u8>>>>> {
-    a.with_header(header, |a| {
-        Ok(reqs
-            .iter()
-            .map(|req| {
-                // The positive reply echoes the service (+0x40) and the identifier, e.g. 62 01 01 for 220101.
-                let mut echo = hex(req);
-                echo[0] += 0x40;
-                let msgs = a.query(req)?;
-                if let Some((_, nrc)) = msgs.iter().find_map(|m| crate::uds::negative(&m.data)) {
-                    anyhow::bail!("refused: {}", crate::actions::nrc_meaning(nrc));
-                }
-                Ok(msgs.into_iter().find(|m| m.data.starts_with(&echo)).map(|m| m.data[echo.len()..].to_vec()))
-            })
-            .collect())
-    })
-}
 
 fn decode(req: &str, p: &[u8], out: &mut Vec<Reading>, cells: &mut Vec<(u32, f64)>) {
     match req {
