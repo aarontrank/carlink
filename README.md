@@ -5,9 +5,11 @@ object, and the agent skill in `skills/carlink/SKILL.md` tells an agent — even
 diagnose a car in a shop or at home, explain it to a person, clear codes after a repair, verify the
 fix, and walk the person through resets.
 
-In-depth support: **2004 Honda CR-V**, **2016 Honda Odyssey**, **2020 Hyundai Kona Electric** (battery
-health with all 98 cells, 12 V, tires, and trouble codes from 13 of its 14 modules — the airbag module
-needs the factory tool). Any OBD-II car gets the generic diagnosis.
+In-depth support: **2004 Honda CR-V**, **2016 Honda Odyssey**, **2018 Honda Clarity Plug-in Hybrid**
+(high-voltage battery capacity against Honda's 36.6 Ah warranty line, 168 cell voltages, odometer, codes
+from all seven computers that answer generic OBD), **2020 Hyundai Kona Electric** (battery health with
+all 98 cells, 12 V, tires, and trouble codes from 13 of its 14 modules — the airbag module needs the
+factory tool). Any OBD-II car gets the generic diagnosis.
 
 ```
 ./install.sh                                   # build, install ~/.local/bin/carlink, link the skill
@@ -17,7 +19,7 @@ carlink tests --vehicle odyssey-2016           # self-tests and per-cylinder mis
 carlink watch --keys stft_b1,ltft_b1,rpm --samples 20
 carlink clear --vehicle odyssey-2016 --vin <VIN> --confirm-clear-codes
 carlink history vehicles                       # then: history dtcs|trend|compare <key> …
-carlink --port sim:kona-ev-2020 scan           # built-in simulator, no car needed
+carlink --port sim:kona-ev-2020 scan           # built-in simulator, no car needed (also sim:clarity-phev-2018)
 ```
 
 Every failure is JSON with `error`, `error_kind` and `what_to_do`. `--trace <file>` on a command that talks
@@ -34,6 +36,8 @@ procedures. Code cites the page a byte offset or threshold comes from.
 ## Safety model
 
 - Reads are fixed sweeps; `raw` accepts only read services (01 02 03 06 07 09 0A 18 19 21 22).
+- On the Clarity, `clear` refuses while a high-voltage battery deterioration code (P0A7F, P1DC7, P144A)
+  is stored: those codes are a dealer's warranty evidence.
 - The only writes are in `clear`: OBD service 04 for engine/emissions codes, UDS/KWP service 14 for a
   module that is named. `clear` needs `--confirm-clear-codes` and a VIN; it refuses when the car reports
   an engine running, when the connected car contradicts `--vin`/`--vehicle`, or when the code read was

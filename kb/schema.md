@@ -3,8 +3,8 @@
 ## Domain
 Diagnosing Aaron's vehicles through an **OBDLink EX** (ScanTool.net, STN-chip USB OBD-II
 adapter) and the `carlink` CLI (`~/carlink`). Covers the adapter and its ELM327/STN command
-sets, the OBD-II/UDS protocols, and the three vehicles: 2004 Honda CR-V, 2016 Honda Odyssey,
-2020 Hyundai Kona Electric. Agents read this wiki when interpreting a `carlink` scan.
+sets, the OBD-II/UDS protocols, and the four vehicles: 2004 Honda CR-V, 2016 Honda Odyssey, 2018 Honda
+Clarity Plug-in Hybrid, 2020 Hyundai Kona Electric. Agents read this wiki when interpreting a `carlink` scan.
 
 This wiki lives inside the carlink repo (`kb/`), so it is versioned with the code it describes:
 changes are committed in `~/carlink`, not in the `~/wikikb` home.

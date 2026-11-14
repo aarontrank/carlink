@@ -1,6 +1,7 @@
-//! The three vehicles carlink knows in depth. Facts cite the wiki in `kb/wiki/`.
+//! The vehicles carlink knows in depth. Facts cite the wiki in `kb/wiki/`.
 
 mod crv;
+pub mod clarity;
 pub mod kona;
 pub mod odyssey;
 
@@ -11,6 +12,9 @@ use serde::Serialize;
 pub enum Powertrain {
     Gasoline,
     Ev,
+    /// Engine plus a plug-in battery: the engine can start by itself whenever the car is READY.
+    #[serde(rename = "plug_in_hybrid")]
+    PluginHybrid,
 }
 
 #[derive(Debug, Serialize)]
@@ -43,6 +47,9 @@ pub struct Profile {
     pub modules: &'static [crate::uds::Module],
     /// Why OBD service 04 must not be used on this car, if it must not.
     pub obd_clear_refused: Option<&'static str>,
+    /// Codes a dealer needs as evidence (and why): while any is present, carlink will not send service 04.
+    #[serde(skip)]
+    pub kept_codes: (&'static [&'static str], &'static str),
     #[serde(skip)]
     known_dtcs: &'static [KnownDtc],
     #[serde(skip)]
@@ -52,7 +59,7 @@ pub struct Profile {
     vin: &'static [(&'static str, char, Option<char>)],
 }
 
-pub static PROFILES: &[Profile] = &[crv::PROFILE, odyssey::PROFILE, kona::PROFILE];
+pub static PROFILES: &[Profile] = &[crv::PROFILE, odyssey::PROFILE, kona::PROFILE, clarity::PROFILE];
 
 const CLEAR_STEPS: &[&str] = &[
     "Only after the repair: explain what clearing does and get an explicit yes from the person (carlink skill, step 6).",
@@ -62,6 +69,29 @@ const CLEAR_STEPS: &[&str] = &[
 
 pub(crate) const fn clear_reset(notes: &'static str) -> Reset {
     Reset { name: "Clear trouble codes / check-engine light (OBD service 04)", carlink_can_do: true, steps: CLEAR_STEPS, notes }
+}
+
+pub(crate) fn hex(s: &str) -> Vec<u8> {
+    (0..s.len() / 2).filter_map(|i| u8::from_str_radix(&s[2 * i..2 * i + 2], 16).ok()).collect()
+}
+
+/// Positive-response payloads (after the 62 xx xx / 61 xx header) for each request to one ECU.
+pub(crate) fn payloads<T: crate::adapter::Transport>(a: &mut crate::adapter::Adapter<T>, header: &str, reqs: &[&str]) -> anyhow::Result<Vec<anyhow::Result<Option<Vec<u8>>>>> {
+    a.with_header(header, |a| {
+        Ok(reqs
+            .iter()
+            .map(|req| {
+                // The positive reply echoes the service (+0x40) and the identifier, e.g. 62 01 01 for 220101.
+                let mut echo = hex(req);
+                echo[0] += 0x40;
+                let msgs = a.query(req)?;
+                if let Some((_, nrc)) = msgs.iter().find_map(|m| crate::uds::negative(&m.data)) {
+                    anyhow::bail!("refused: {}", crate::actions::nrc_meaning(nrc));
+                }
+                Ok(msgs.into_iter().find(|m| m.data.starts_with(&echo)).map(|m| m.data[echo.len()..].to_vec()))
+            })
+            .collect())
+    })
 }
 
 pub fn by_id(id: &str) -> Option<&'static Profile> {
@@ -107,6 +137,7 @@ pub fn vin_info(vin: &str) -> VinFacts {
 pub fn extended<T: crate::adapter::Transport>(p: &Profile, a: &mut crate::adapter::Adapter<T>) -> (Vec<crate::obd::Reading>, Vec<crate::findings::Finding>) {
     let (readings, errors) = match p.id {
         "kona-ev-2020" => kona::read(a),
+        "clarity-phev-2018" => clarity::read(a),
         _ => (vec![], vec![]),
     };
     let findings = if errors.is_empty() {
@@ -140,6 +171,10 @@ pub fn annotate(p: &Profile, _scan: &crate::scan::Scan, extended: &[crate::obd::
     }
     if p.id == "kona-ev-2020" {
         findings.extend(kona::findings(extended));
+    }
+    if p.id == "clarity-phev-2018" {
+        clarity::adapt_engine_findings(findings);
+        findings.extend(clarity::findings(extended));
     }
 }
 
@@ -232,9 +267,28 @@ mod tests {
     }
 
     #[test]
+    fn clarity_plug_in_hybrid_is_detected_from_its_vin_and_not_the_electric() {
+        assert_eq!(detect(clarity::SIM_VIN).map(|p| p.id), Some("clarity-phev-2018"));
+        assert_eq!(detect("JHMZC5F18JC000001").map(|p| p.id), Some("clarity-phev-2018"), "base trim");
+        assert!(detect("JHMZC5F36KC000001").is_none(), "2019");
+        assert_eq!(vin_info(clarity::SIM_VIN).make, Some("Honda"));
+        assert_eq!(by_id("clarity-phev-2018").unwrap().powertrain, Powertrain::PluginHybrid);
+        assert_eq!(serde_json::to_value(Powertrain::PluginHybrid).unwrap(), "plug_in_hybrid");
+    }
+
+    #[test]
+    fn clarity_report_carries_battery_data_and_the_engine_codes() {
+        let mut a = crate::adapter::Adapter::connect(crate::sim::Sim::new("clarity-phev-2018").unwrap()).unwrap();
+        let r = crate::report::build(&mut a, &crate::report::Ident::default()).unwrap();
+        assert_eq!(r.vehicle.unwrap().id, "clarity-phev-2018");
+        assert!(r.extended.iter().any(|x| x.key == "hv_capacity_ah"));
+        assert!(r.codes.iter().any(|c| c.code == "P0456"));
+    }
+
+    #[test]
     fn profiles_resolve_by_id() {
         assert_eq!(by_id("kona-ev-2020").unwrap().powertrain, Powertrain::Ev);
         assert!(by_id("nope").is_none());
-        assert_eq!(PROFILES.len(), 3);
+        assert_eq!(PROFILES.len(), 4);
     }
 }

@@ -53,8 +53,8 @@ pub struct Scan {
 }
 
 /// Engine computer reply addresses, most likely first: 7E8 (11-bit CAN), 18DAF110 (29-bit), Honda's
-/// 18DAF111 (29-bit), 10 (K-line).
-const ENGINE_ECUS: [&str; 4] = ["7E8", "18DAF110", "18DAF111", "10"];
+/// 18DAF111 (29-bit), the Clarity PHEV's 18DAF10E (29-bit, wiki clarity-phev-2018), 10 (K-line).
+const ENGINE_ECUS: [&str; 5] = ["7E8", "18DAF110", "18DAF111", "18DAF10E", "10"];
 
 /// The one ECU among `ecus` treated as the engine computer: its readings get bare history keys and
 /// drive the engine findings. Exactly one, so a key never belongs to two modules.
@@ -402,6 +402,16 @@ mod tests {
         assert_eq!(s.ecus, vec!["18DAF111", "18DAF11D"]);
         assert_eq!(s.vin.as_deref(), Some("5FNRL5H60GB000001"));
         assert!(s.dtcs.iter().any(|d| d.code == "P0303" && d.ecu == "18DAF111"));
+        assert!(s.codes_complete, "{:?}", s.errors);
+    }
+
+    #[test]
+    fn a_clarity_scan_reads_all_seven_ecus_and_finds_its_engine_computer() {
+        let s = run("clarity-phev-2018");
+        assert_eq!(s.ecus, vec!["18DAF101", "18DAF102", "18DAF106", "18DAF10E", "18DAF115", "18DAF116", "18DAF12A"]);
+        assert_eq!(engine_ecu(s.ecus.iter().map(String::as_str)), Some("18DAF10E"));
+        assert_eq!(s.vin.as_deref(), Some(crate::vehicles::clarity::SIM_VIN));
+        assert!(s.dtcs.iter().any(|d| d.code == "P0456" && d.kind == "pending" && d.ecu == "18DAF10E"));
         assert!(s.codes_complete, "{:?}", s.errors);
     }
 

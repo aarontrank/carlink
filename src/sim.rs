@@ -2,7 +2,7 @@
 
 use crate::adapter::Transport;
 use crate::elm::Bus;
-use crate::vehicles::kona;
+use crate::vehicles::{clarity, kona};
 use anyhow::{Result, bail};
 use std::collections::BTreeMap;
 
@@ -26,9 +26,10 @@ pub struct Sim {
     bus: Bus,
     protocol: (&'static str, &'static str),
     ecus: Vec<Ecu>,
-    header: u16,
+    /// 11-bit (`7DF`) or 29-bit (`18DB33F1`) request header.
+    header: u32,
     /// Receive filter set by `ATCRA <id>`; cleared by `ATAR` or a bare `ATCRA`.
-    rx_filter: Option<u16>,
+    rx_filter: Option<u32>,
     pub ignition_off: bool,
     /// ECUs stay silent on service 04.
     pub ignore_clear: bool,
@@ -80,15 +81,15 @@ fn kwp(nrc: u8, dtcs: Vec<([u8; 3], u8)>) -> Option<ModuleSim> {
 struct Injection {
     cmd: String,
     reply: String,
-    /// Only while this request header is set (11-bit, e.g. 0x7D1).
-    header: Option<u16>,
+    /// Only while this request header is set (e.g. 0x7D1).
+    header: Option<u32>,
     /// Only once this command has been sent at least once.
     after: Option<String>,
 }
 
-pub const VEHICLES: &[&str] = &["crv-2004", "odyssey-2016", "kona-ev-2020"];
+pub const VEHICLES: &[&str] = &["crv-2004", "odyssey-2016", "kona-ev-2020", "clarity-phev-2018"];
 // Must name every fault `apply_fault` accepts: tests hold the --port help and SKILL.md to this list.
-pub const FAULTS: &[&str] = &["engine-off", "ignition-off", "not-in-car", "can29"];
+pub const FAULTS: &[&str] = &["engine-off", "ignition-off", "not-in-car", "can29", "battery-worn"];
 
 fn pids(list: &[(u8, &[u8])]) -> BTreeMap<u8, Vec<u8>> {
     list.iter().map(|(p, d)| (*p, d.to_vec())).collect()
@@ -164,6 +165,30 @@ impl Sim {
                 Ecu { id: 0x7BB, module: uds(0x09, vec![]), ..Default::default() },
                 Ecu { id: 0x7BE, module: uds(0x7F, vec![]), ..Default::default() },
             ]),
+            // Seven ECUs answer generic OBD on 29-bit CAN, as in OBDb's 2018 captures (wiki clarity-phev-2018);
+            // the engine computer is 0x0E. The car is READY with the engine running (HV mode).
+            "clarity-phev-2018" => (Bus::Can29, ("7", "ISO 15765-4 (CAN 29/500)"), {
+                let common: &[(u8, &[u8])] = &[
+                    (0x01, &[0x00, 0x04, 0x00, 0x00]), (0x04, &[0x2A]), (0x05, &[0x7B]), (0x0C, &[0x12, 0xC0]), (0x0D, &[0x00]),
+                    (0x11, &[0x1F]), (0x1F, &[0x01, 0x2C]), (0x21, &[0x00, 0x00]), (0x31, &[0x00, 0xF9]), (0x42, &[0x37, 0x64]),
+                ];
+                let mirror = |id: u16, extra: &[(u8, &[u8])]| Ecu { id, pids: pids(&[common, extra].concat()), extra: clarity::sim_extra(id), ..Default::default() };
+                let mut pcm = mirror(0x0E, &[
+                    (0x03, &[0x02, 0x00]), (0x06, &[0x80]), (0x07, &[0x83]), (0x0B, &[0x21]), (0x0E, &[0x90]), (0x13, &[0x03]),
+                    (0x15, &[0x82, 0xFF]), (0x24, &[0x80, 0x10, 0x66, 0x00]), (0x2F, &[0x80]), (0x30, &[0x28]), (0x33, &[0x63]),
+                    (0x46, &[0x3A]), (0x5B, &[0x4F]),
+                ]);
+                pcm.pids.insert(0x01, vec![0x00, 0x07, 0xE5, 0x00]);
+                pcm.vin = Some(clarity::SIM_VIN);
+                pcm.pending = vec![0x0456];
+                // Standard CAN misfire MIDs (A1 all cylinders, A2–A5 cylinders 1–4); not captured from a Clarity.
+                pcm.mode06 = [misfire(0xA1, 0, 0), misfire(0xA2, 0, 0), misfire(0xA3, 0, 0), misfire(0xA4, 0, 0), misfire(0xA5, 0, 0)].into();
+                vec![
+                    mirror(0x01, &[(0x5B, &[0x4F])]), mirror(0x02, &[]), mirror(0x06, &[]), pcm,
+                    mirror(0x15, &[(0x5B, &[0x4F])]), mirror(0x16, &[]), mirror(0x2A, &[(0x5B, &[0x4F])]),
+                    Ecu { id: 0x60, extra: clarity::sim_extra(0x60), ..Default::default() },
+                ]
+            }),
             other => bail!("unknown sim vehicle '{other}' (known: {})", VEHICLES.join(", ")),
         };
         Ok(Sim { bus, protocol, ecus, header: 0x7DF, rx_filter: None, ignition_off: false, ignore_clear: false, ignition_off_after_clear: false, forget_vin_after_clear: false, port_voltage: None, identity: "ELM327 v1.4b", injected: Vec::new(), appended: Vec::new(), failure: None, log: Vec::new() })
@@ -195,11 +220,21 @@ impl Sim {
                 }
             }
             "can29" => bail!("the can29 fault only applies to odyssey-2016"),
+            "battery-worn" if vehicle == "clarity-phev-2018" => {
+                // Pack capacity 35.20 Ah (below Honda's 36.6 Ah line) and the deterioration codes owners report.
+                if let Some(bms) = self.ecus.iter_mut().find(|e| e.id == 0x01) {
+                    bms.stored = vec![0x0A7F, 0x1DC7];
+                    if let Some(p) = bms.extra.get_mut("22202A") {
+                        p[170..172].copy_from_slice(&3520u16.to_be_bytes());
+                    }
+                }
+            }
+            "battery-worn" => bail!("the battery-worn fault only applies to clarity-phev-2018"),
             "not-in-car" => {
                 self.ignition_off = true;
                 self.port_voltage = Some("0.1V");
             }
-            other => bail!("unknown simulator fault '{other}' (known: {}; can29 only for odyssey-2016)", FAULTS.join(", ")),
+            other => bail!("unknown simulator fault '{other}' (known: {}; can29 only for odyssey-2016, battery-worn only for clarity-phev-2018)", FAULTS.join(", ")),
         }
         Ok(())
     }
@@ -216,7 +251,7 @@ impl Sim {
     }
 
     /// Like `inject`, but only for requests to `header`, and only after `after` has been sent.
-    pub fn inject_where(&mut self, header: u16, after: Option<&str>, cmd: &str, reply: &str) {
+    pub fn inject_where(&mut self, header: u32, after: Option<&str>, cmd: &str, reply: &str) {
         self.injected.push(Injection { cmd: cmd.to_string(), reply: reply.to_string(), header: Some(header), after: after.map(str::to_string) });
     }
 
@@ -243,6 +278,23 @@ impl Sim {
         self.ecus.retain(|e| e.id != ecu);
     }
 
+    fn functional(&self) -> bool {
+        self.header == 0x7DF || self.header == 0x18DB33F1
+    }
+
+    /// The CAN ID an ECU replies from: 11-bit as is, 29-bit `18DAF1xx`.
+    fn reply_id(&self, id: u16) -> u32 {
+        if self.bus == Bus::Can29 { 0x18DAF100 | (id as u32 & 0xFF) } else { id as u32 }
+    }
+
+    /// The ECU a physical header addresses: 11-bit request + 8, or 29-bit `18DAxxF1` → `xx`.
+    fn physical_target(&self) -> Option<u16> {
+        match self.bus {
+            Bus::Can29 => (self.header & 0xFFFF_00FF == 0x18DA_00F1).then_some(((self.header >> 8) & 0xFF) as u16),
+            _ => u16::try_from(self.header + 8).ok(),
+        }
+    }
+
     fn engine_running(&self) -> bool {
         self.ecus.iter().any(|e| e.pids.get(&0x0C).is_some_and(|d| d.iter().any(|b| *b != 0)))
     }
@@ -257,6 +309,13 @@ impl Sim {
     pub fn set_stored(&mut self, ecu: u16, codes: &[u16]) {
         if let Some(e) = self.ecus.iter_mut().find(|e| e.id == ecu) {
             e.stored = codes.to_vec();
+        }
+    }
+
+    /// Replace one ECU's permanent emissions codes.
+    pub fn set_permanent(&mut self, ecu: u16, codes: &[u16]) {
+        if let Some(e) = self.ecus.iter_mut().find(|e| e.id == ecu) {
+            e.permanent = codes.to_vec();
         }
     }
 
@@ -425,11 +484,11 @@ impl Transport for Sim {
                 "OK".to_string()
             }
             c if c.starts_with("ATCRA") => {
-                self.rx_filter = u16::from_str_radix(&c[5..], 16).ok();
+                self.rx_filter = u32::from_str_radix(&c[5..], 16).ok();
                 "OK".to_string()
             }
             c if c.starts_with("ATSH") => {
-                self.header = u16::from_str_radix(&c[4..], 16).unwrap_or(0x7DF);
+                self.header = u32::from_str_radix(&c[4..], 16).unwrap_or(0x7DF);
                 "OK".to_string()
             }
             c if c.starts_with("AT") || c.starts_with("ST") => "OK".to_string(),
@@ -444,8 +503,8 @@ impl Transport for Sim {
                     return Ok("7EB 01 44\r7EC 01 44\r\r>".into());
                 }
                 // A module clears only on the request form of its own protocol.
-                let target = self.header + 8;
-                if let Some(m) = self.ecus.iter_mut().find(|e| e.id == target).and_then(|e| e.module.as_mut())
+                let target = self.physical_target();
+                if let Some(m) = self.ecus.iter_mut().find(|e| Some(e.id) == target).and_then(|e| e.module.as_mut())
                     && ((!m.kwp && req == [0x14, 0xFF, 0xFF, 0xFF]) || (m.kwp && req == [0x14, 0xFF, 0x00]))
                 {
                     m.dtcs.clear();
@@ -472,8 +531,8 @@ impl Transport for Sim {
                 let lines: Vec<String> = self
                     .ecus
                     .iter()
-                    .filter(|e| self.header == 0x7DF || !self.bus.is_can() || e.id == self.header + 8)
-                    .filter(|e| self.rx_filter.is_none_or(|f| e.id == f))
+                    .filter(|e| self.functional() || !self.bus.is_can() || Some(e.id) == self.physical_target())
+                    .filter(|e| self.rx_filter.is_none_or(|f| self.reply_id(e.id) == f))
                     .flat_map(|e| self.answer(e, &req, c).into_iter().flat_map(|p| self.frames(e.id, &p)).collect::<Vec<_>>())
                     .collect();
                 if lines.is_empty() { "NO DATA".to_string() } else { lines.join("\r") }
@@ -520,7 +579,8 @@ mod tests {
     fn every_listed_fault_is_accepted_and_named_in_the_skill() {
         let skill = include_str!("../skills/carlink/SKILL.md");
         for fault in FAULTS {
-            assert!(Sim::from_spec(&format!("odyssey-2016:{fault}")).is_ok(), "{fault}");
+            let car = if *fault == "battery-worn" { "clarity-phev-2018" } else { "odyssey-2016" };
+            assert!(Sim::from_spec(&format!("{car}:{fault}")).is_ok(), "{fault}");
             assert!(skill.contains(&format!(":{fault}")), "SKILL.md does not name :{fault}");
         }
     }

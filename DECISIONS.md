@@ -197,6 +197,140 @@ problems and reset errors. The skill must work even for less capable agents.
   skipped with a stderr warning — the same "a trace never stops a diagnosis" rule as a failed write.
   Residuals: review K76.
 
+## 2026-11-13 — 2018 Honda Clarity Plug-in Hybrid (autonomous, branch `clarity-phev-2018`)
+
+Brief from Aaron: confirm carlink works with his 2018 Honda Clarity Touring, fill any gaps, open a PR,
+work independently, and log every decision for review. Nothing below has run on the real car (O11).
+
+### What the car is
+- **D51. "2018 Clarity Touring" is the Plug-in Hybrid.** The Electric and the Fuel Cell were lease-only
+  and had no Touring trim; NHTSA vPIC decodes `JHMZC5F3*JC` as "2018 Clarity TOURING, PHEV" and the
+  Electric as `JHMZC6F`. The profile `clarity-phev-2018` matches `JHMZC5F` + year `J` (both trims).
+- **D52. The evidence is OBDb's real 2018 captures** (`OBDb/Honda-Clarity` at `20139af`,
+  `kb/raw/obdb-honda-clarity-2026-11-13.md`), plus Honda service bulletin 17-093, the owner's manual and
+  NHTSA data. Every byte offset carlink uses was decoded from the captures and compared with OBDb's own
+  expected values (0 mismatches over 17,256 cell values and the odometer).
+
+### Gaps found in carlink, and the fixes
+- **D53. Gap: carlink would not have recognised the Clarity's engine computer.** Seven ECUs answer
+  generic OBD on 29-bit CAN; the one with the emissions monitors is `18DAF10E`, which was not in
+  `ENGINE_ECUS`. Without it, readings were attributed to whichever module answered first and none got
+  the engine's history keys. Added after `18DAF111` (so the Odyssey and other cars are unaffected).
+- **D54. The engine-off check before a clear now looks at every module's rpm, not the first reply.**
+  The doc comment already promised "any car reporting rpm above 0 is refused"; with seven modules
+  answering 010C, the old code checked only whichever reply came first. Fails closed.
+- **D55. Physical addressing works on 29-bit CAN.** `with_header` accepts `18DAxxF1` on a 29-bit car
+  (reply filter `18DAF1xx`, flow control to the module) and refuses a header of the other size before
+  anything is sent. `reset_addressing` on 29-bit now sends `ATFCSM0 ATAR ATSH18DB33F1` (it was a no-op),
+  so the clear path also re-asserts the functional header on the Odyssey's 29-bit variant — the safer
+  direction. All commands are volatile and documented in the OBDLink FRPM; none is on the never-send list.
+- **D56. Clarity extended read = BMS `01` (`22 202A` summary, `22 2028` cells), BMS `16` (same), meter
+  `60` (`22 7022` odometer).** Read-only service 22, as on the Kona. The shared request helper
+  (`payloads`) moved from `kona.rs` to `vehicles/mod.rs` so both cars use it.
+- **D57. Cell spread is computed within each 84-cell string, the worse of the two**, never across the
+  two strings: cells in series carry the same current, while the strings are read a moment apart. All
+  168 cells must read 2.5–4.3 V or no spread is reported.
+- **D58. New powertrain `plug_in_hybrid`.** For the clear it is treated like an engine car (it must
+  positively report 0 rpm) — the engine can start by itself in READY.
+
+### Battery health and clearing
+- **D59. Capacity is judged against Honda's own numbers:** 55 Ah new and the 36.6 Ah
+  warranty-replacement line (S/B 17-093, which also says the car sets no code at that level — so this
+  reading is the owner's only early warning). Warning below 36.6 Ah, Advice below 44 Ah (80 %). Not
+  invented: the Kona's 90/80 % SOH ladder was not reused.
+- **D60. Exactly 55.0 Ah gets an Info finding, not a health verdict.** One owner reports the reading
+  jumping back to 55 Ah after a code clear, and 95 of OBDb's captures sit at exactly 55.0 Ah; a new car
+  also reads 55, so carlink says "not a health result yet" rather than "healthy".
+- **D61. Cell-spread findings only near rest (|current| ≤ 5 A): Advice ≥ 50 mV, Warning ≥ 100 mV.**
+  No Honda threshold was found; real Claritys showed up to 46 mV at unknown load, so the Advice line
+  sits above anything observed. Unverified (O12).
+- **D62. carlink refuses the OBD clear while P0A7F, P1DC7 or P144A is stored** (new profile field
+  `kept_codes`, gated on exact codes). Owners report Honda approving warranty pack replacements on
+  P0A7F + P1DC7, and the clear also resets the capacity estimate: an innocent "clear the light" could
+  destroy a warranty claim, and a 2018 is at the end of its 8-year term in 2026. Same principle as the
+  Kona's BMS (D30). It also refuses when the code read was incomplete (it cannot rule the codes out),
+  and ignores a code left only as permanent (service 04 cannot clear those). Any other clear still works; the skill now tells the person, before a Clarity
+  clear, that the capacity reading resets and the current value is saved in history.
+- **D63. Clarity clears are done in ON, not READY** (POWER twice without the brake): in READY the
+  engine starts by itself (owner's manual). No idle learn is listed for the Clarity — none is sourced
+  and the driver cannot hold engine rpm.
+
+### Simulator, tests and docs
+- **D64. Simulator `sim:clarity-phev-2018`:** 29-bit, the seven ECUs mirroring common PIDs, the engine
+  computer with the full set; BMS and meter replies are real OBDb captures chosen so their voltages
+  agree. Assumptions, marked in the code: the VIN comes from `18DAF10E`, the misfire MIDs are standard,
+  the car is READY with the engine running, and one pending P0456 (EVAP; matches NHTSA complaints about
+  "Emission System Problem" after the fuel-pump recall) is there to practise on. New fault
+  `:battery-worn` (35.2 Ah, P0A7F + P1DC7) so the refusal and the warranty finding can be rehearsed.
+- **D65. The skill gained Clarity lines rather than a new section**: profile id, READY/ON instructions,
+  the capacity explanation, the clear clause and refusal, practice ports.
+- **D66. Skill hardening: two rounds on Haiku** (`claude -p --safe-mode`, which hid the global
+  CLAUDE.md, rules and memory on Claude Code 2.1.325 — checked; every trial's `init` line showed Haiku, four
+  tools, no MCP servers and no installed carlink skill). Round 1: battery-health question (owner), clear
+  after a gas-cap repair (shop), "just clear it before my trade-in" with worn-battery codes (trap).
+  Round 2: the three again, plus a new TPMS-after-rotation and cell-balance job. It stopped after round 2:
+  the re-runs passed the items that had failed, everything new was low, and round 2 had a new job.
+  Findings (T = trial):
+  - T1 high: the scan printed a second, per-string capacity (20.5 Ah) that two agents set against the
+    36.6 Ah pack line — one nearly told an owner the battery qualified. Fixed in the tool: carlink no
+    longer reads or prints it (wiki `clarity-phev-hv-battery`). Held in round 2.
+  - T2 medium: the Clarity reports its own odometer but the skill said "leave out `--odometer-mi`" only
+    for the Kona. Fixed in the skill. Held.
+  - T5 medium: an agent said the pack "qualifies" for replacement. The skill now says "may be eligible if
+    still within the warranty; Honda decides after a dealer check; never 'qualifies'". Held.
+  - T6 medium: refusing the trade-in clear, an agent invented a reason. The skill now says to give the
+    error's reason and that the light returns, and nothing of its own. Held.
+  - T9 medium (read-through): the glossary's "cell spread ≤ 0.02 V is healthy" was the Kona's rule and
+    would have judged the Clarity's normal spread. Split per car. Held (round 2 new job).
+  - Low, fixed without a re-run: P0A7F/P1DC7 note names the POWER SYSTEM light (T7); ask the first-sale
+    date and state before talking coverage (T8; this one was re-run and held); say plainly when the
+    warranty has ended; skip the 6.1 question when a kept code makes carlink refuse; the Clarity's TPMS
+    is indirect, so carlink has nothing to read. Not changed: READY cannot be confirmed from carlink's
+    output (T3), a trial calling 14.1 V "fine" unprompted (T4).
+  - Not reached by any job: the Maintenance Minder and 12 V reset steps, `watch`, history trends, and the
+    exactly-55.0 Ah finding (unit-tested only).
+- **D67. Code review (high) of the branch: ten findings, seven fixed.** Fixed test-first: the battery-code
+  guard failed open on an incomplete scan with `--only engine` and blocked clears over a permanent-only
+  code (D62); an unset capacity (`FFFF` = 655.35 Ah) would have been reported — capacities outside
+  0–60 Ah are dropped; the generic "engine not warming up" finding is dropped on the Clarity (its engine
+  does not run whenever the car is on) and the charging findings name the DC-DC converter instead of an
+  alternator; the guard's advice no longer names Honda; `raw --header` takes 29-bit headers, and a
+  header of the wrong size is `bad_input` with a `what_to_do`; the first-session checklist no longer
+  names the removed per-string capacity. Not fixed: carlink cannot tell READY from ON on the Clarity
+  (no documented reading; the skill and profile carry it, as on the Kona); the vehicle helpers
+  (`r`, `u16be`, `get`, `finding`) duplicated between `kona.rs` and `clarity.rs`, and per-vehicle hooks
+  chosen by id string in `extended`/`annotate` — both existing patterns, left for a refactor of their own.
+- **D67a. Review stopped at round 3 (stopping rule), re-scoped by removal.** Round 2 found two problems
+  caused by my round-1 fixes (a lowercase 29-bit `--header` refused; the DC-DC rewording missed the
+  engine-off case). I fixed those, plus a padding guard for the BMS summary and a rewording of the
+  resting-battery findings. Round 3 then found medium problems in those round-2 additions (the guard
+  half-worked and mislabelled its error; its range checks had no test that could fail; the new advice
+  contradicted the generic "at rest" detail). Two rounds in a row of fix-caused findings: stopped, and
+  removed both round-2 additions instead of patching them. Kept from round 2: uppercasing `--header`,
+  the "stored or pending" wording (with is/are), and the integration test tying the Clarity rewording to
+  the generic finding titles. Residuals (not fixed, low or out of scope): a 12 V reading that is low
+  because the DC-DC converter failed in READY with the engine off is reported with the generic "12 V
+  battery partly discharged / weak at rest" advice — the profile notes say 14 V in READY is normal and
+  what the charging light means; a partly FF-padded BMS reply would be decoded as-is (no capture shows
+  one); `7DF`/`18DAF1F1` accepted as physical headers; header validation in two places; the guard only
+  for the 2018 profile (O14).
+- **D68. `skill-shootout` was not run.** It needs Aaron's go-ahead on its plan and cost ceiling before
+  anything runs (≈ $5 per arm, three arms, plus judging), and its arms would need `Bash` with the
+  branch's `carlink` build on PATH. Offered in the PR; verdict: not run.
+
+### Open decisions (Clarity)
+- **O11. First session on the Clarity** (`docs/first-real-session.md`): confirm the seven ECUs, which
+  one answers `0902`, that the BMS and meter answer 29-bit physical reads in READY and in ON, and the
+  odometer against the dashboard.
+- **O12. Cell-spread thresholds** (D61) need a Honda source or real data from Aaron's car.
+- **O14. Battery-evidence guard beyond the 2018.** P0A7F/P1DC7/P144A are protected only when the car is
+  identified as `clarity-phev-2018`; a 2019–2021 Clarity (`JHMZC5F…K/L`) or an unidentified car gets
+  them cleared like any code. Widening it (to those years, or to every hybrid) is a scope decision for
+  Aaron.
+- **O13. Aaron's battery warranty.** A 2018 bought new in 2018 reaches 8 years / 100,000 miles during
+  2026 (10 years / 150,000 miles in CARB states). Read `hv_capacity_ah` soon: below 36.6 Ah inside the
+  term is a warranty replacement.
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and
