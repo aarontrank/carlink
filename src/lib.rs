@@ -16,3 +16,4 @@ pub mod watch;
 pub mod probe;
 pub mod mode06;
 pub mod trace;
+pub mod recalls;

@@ -22,6 +22,7 @@ pub const PROFILE: Profile = Profile {
     name: "2018 Honda Clarity Plug-in Hybrid",
     powertrain: Powertrain::PluginHybrid,
     wiki: "clarity-phev-2018",
+    nhtsa: ("honda", "clarity plug-in hybrid", 2018),
     recalls: &["23V858: fuel pump."],
     notes: &[
         "Plug-in hybrid: in READY the gasoline engine starts and stops by itself (system check, low battery charge, heavy climate use), so rpm 0 in READY is normal. Scan in READY; clear with the car ON but not READY (POWER pressed twice without the brake).",

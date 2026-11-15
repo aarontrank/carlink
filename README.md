@@ -18,6 +18,7 @@ carlink scan --vehicle odyssey-2016 --vin <VIN> --odometer-mi 98000
 carlink tests --vehicle odyssey-2016           # self-tests and per-cylinder misfire counts
 carlink watch --keys stft_b1,ltft_b1,rpm --samples 20
 carlink clear --vehicle odyssey-2016 --vin <VIN> --confirm-clear-codes
+carlink recalls --vehicle kona-ev-2020         # NHTSA's live recall list (internet; never sends the VIN)
 carlink history vehicles                       # then: history dtcs|trend|compare <key> …
 carlink --port sim:kona-ev-2020 scan           # built-in simulator, no car needed (also sim:clarity-phev-2018)
 ```
@@ -35,6 +36,8 @@ procedures. Code cites the page a byte offset or threshold comes from.
 
 ## Safety model
 
+- Only `recalls` uses the internet: it sends NHTSA the profile's make, model and year through the system's
+  `curl`, never the VIN, and falls back to carlink's own list when offline.
 - Reads are fixed sweeps; `raw` accepts only read services (01 02 03 06 07 09 0A 18 19 21 22).
 - On the Clarity, `clear` refuses while a high-voltage battery deterioration code (P0A7F, P1DC7, P144A)
   is stored: those codes are a dealer's warranty evidence.

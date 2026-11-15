@@ -331,6 +331,82 @@ work independently, and log every decision for review. Nothing below has run on 
   2026 (10 years / 150,000 miles in CARB states). Read `hv_capacity_ah` soon: below 36.6 Ah inside the
   term is a warranty replacement.
 
+## 2026-11-15 — `carlink recalls` (NHTSA live recall list)
+
+Aaron asked for a recall lookup ("yeah, build it") after the first real Kona scan.
+
+- **D69. Live list by make, model and year only; open status by VIN is not offered.** NHTSA's VIN
+  endpoints need a key (403 without one) and the manufacturers' VIN lookups are web pages. carlink says
+  plainly that it cannot tell whether a recall was done, and the skill forbids "no open recalls".
+- **D70. `curl` instead of an HTTP crate.** One subprocess call, no TLS dependency tree; macOS and most
+  Linux systems ship curl. A missing curl is reported as `fetch_error` and the built-in list is used.
+- **D71. Each profile pins NHTSA's exact model name** (`Profile::nhtsa`). A wrong name returns 0 recalls
+  with a success message (`clarity` vs `clarity plug-in hybrid`), so campaigns from carlink's list missing
+  from the reply are named in `carlink_only` with a warning.
+- **D72. `scan` stays offline; the skill runs `recalls` after the scan instead.** A scan in a garage
+  without internet must not wait on a 20 s timeout, and its output stays deterministic. (In chat I had
+  proposed a section in `scan` too; this is a deliberate change from that.)
+- **D73. Offline or an unreadable reply is not an error** (exit 0, `source: carlink`, `fetch_error`, a
+  warning): the built-in list is still useful, and the agent is told it may miss newer recalls.
+- **D74. NHTSA's `parkIt` / `parkOutSide` flags become warnings the skill puts first.** On the 2020 Kona,
+  21V-127 and 20V-630 carry `parkOutSide`.
+- **D75. Only the four profiles.** No `--make/--model/--year` for other cars (YAGNI); the query test pins
+  each profile's year to its name.
+- **D76. No test hook (removed after review, D80).** The live fetch is covered only by a manual run
+  against NHTSA; `parse` and `lookup` are tested on the saved NHTSA replies in `kb/raw/nhtsa/`.
+
+- **D77. Code review (high), round 1: ten findings, eight fixed.**
+  - **Fixed:**
+    - With NHTSA offline, the park-outside advice vanished: the offline warning now says it could not be
+      checked, and the Kona's built-in 21V-127/20V-630 lines carry it.
+    - A skill bullet would have made an offline agent say "NHTSA lists no recalls"; it now applies only
+      to a live reply.
+    - Report dates are validated before sorting.
+    - The CR-V's Takata line names its campaigns and 07E104 is listed, so every saved NHTSA reply
+      matches carlink's list (a test pins this).
+    - "likely still open" is gone from the Kona's 26V-728 line (a test forbids "open").
+    - `CARLINK_NHTSA_BASE` is honoured only in debug builds, and release curl is limited to https.
+    - Matching runs once.
+    - Tests no longer depend on port 9, and the real Kona reply is tested.
+  - **Declined:**
+    - A separate `campaigns` field per profile: the text already carries the ids, and a second copy
+      could drift (the scanner plus the saved-reply test cover it).
+    - The shootout Verdict: still to come (hardening, then shootout).
+
+- **D78. Code review round 2 found medium problems my round-1 fixes caused** (release-build tests hitting
+  live NHTSA; a silently ignored override; static park-outside text that would go stale; a test banning
+  the word "open"). One more such round triggers the stopping rule, so I re-scoped by removal: the hook
+  works in every build again (with `query.url` shown), the static text and the "open" test are gone. Low,
+  not fixed: impossible dates like 31/02 pass the date check.
+- **D79. Skill hardening round 3** (Haiku, `claude -p --safe-mode`, three jobs: live list, offline, and an
+  empty NHTSA reply). 3a and 3b passed every check. 3c said "the NHTSA list shows no recalls" while
+  carlink's list had 23V-858 (medium): the tool's warning now says an empty reply "does not mean there
+  are none", and the skill forbids "NHTSA lists no recalls" when `carlink_only` is not empty. 3a missed
+  21V-127's build dates, which only carlink's line carries (medium): the skill now says to add it.
+  The four-cars lines now say the person checks a recall by VIN (low).
+
+- **D80. Review stopped at round 3 (stopping rule), re-scoped by removal.** Round 3 again found medium
+  problems my round-2 fixes caused: the test hook (now honoured in release builds) could pass a stale
+  local file off as NHTSA's list, an empty value broke every lookup, release curl accepted `file://`, and
+  the reworded warnings either tripped the skill's "say park-outside first" rule or used the very
+  "NHTSA returned no recalls" phrasing the skill forbids. I stopped fixing and removed the hook entirely
+  (curl is `https` only again, `query.url` is gone) and reworded the two warnings. No further review
+  round was run after this. Residuals, not fixed:
+  - offline, carlink does not say which campaigns NHTSA advises parking outside for (the warning says
+    the safety advice could not be checked);
+  - the skill has the agent match `recalls[]` to `carlink_list` lines by hand (a matched-line field
+    would be simpler);
+  - nothing guards profile text against claiming a recall is "open";
+  - impossible dates such as 31/02 pass the date check;
+  - the CLI has no automated test of a successful fetch.
+- **D81. Skill hardening ended after round 4** (its stop rule: no high or medium finding on the changed
+  section). 4a and 4c (re-runs) passed every check; 4d (new: Kona scan + recalls, attached garage)
+  passed except that it left out 21V-127's build dates (low; 4a followed the same text). Found outside
+  this change, not fixed: the skill says `inspection` is null on the Kona but the scan returns it; it
+  does not cover an owner's mileage that differs from the car's `odometer_mi`. The trials ran with the
+  test hook that D80 later removed, and only wording changed after them.
+- **D82. `skill-shootout` was not run.** It needs Aaron's go-ahead on its plan and cost first.
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and
