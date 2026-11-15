@@ -29,6 +29,7 @@ pub const PROFILE: Profile = Profile {
     ],
     modules: &[],
     obd_clear_refused: None,
+    kept_codes: (&[], ""),
     known_dtcs: &[
         KnownDtc { code: "P0300", note: RANDOM_MISFIRE },
         KnownDtc { code: "P0301", note: VCM_MISFIRE },

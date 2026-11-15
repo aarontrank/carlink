@@ -63,6 +63,21 @@ fn is_read(cmd: &str) -> bool {
     u8::from_str_radix(cmd.get(..2).unwrap_or(""), 16).is_ok_and(|sid| READ_SERVICES.contains(&sid))
 }
 
+/// The reply ID for a physical request `header` on `bus`, or why carlink will not address it.
+fn reply_id(bus: Bus, header: &str) -> Result<String> {
+    const FIX: &str = "Use a header such as 7E4 on an 11-bit CAN car and 18DAxxF1 on a 29-bit one (`carlink probe` shows the protocol), or leave --header out.";
+    let hex = header.chars().all(|c| c.is_ascii_hexdigit());
+    match bus {
+        Bus::Can11 => match u16::from_str_radix(header, 16) {
+            Ok(id) if hex && header.len() == 3 && id <= 0x7F7 => Ok(format!("{:03X}", id + 8)),
+            _ => Err(problem("bad_input", format!("bad 11-bit CAN header '{header}' (this car uses 11-bit CAN)"), FIX)),
+        },
+        Bus::Can29 if hex && header.len() == 8 && header.starts_with("18DA") && header.ends_with("F1") => Ok(format!("18DAF1{}", &header[4..6])),
+        Bus::Can29 => Err(problem("bad_input", format!("bad 29-bit CAN header '{header}' (this car uses 29-bit CAN; expected 18DAxxF1)"), FIX)),
+        other => Err(problem("bad_input", format!("physical addressing is only supported on CAN; this vehicle uses {other:?}"), FIX)),
+    }
+}
+
 fn adapter_line(e: &anyhow::Error) -> Option<&str> {
     e.downcast_ref::<AdapterError>().map(|a| a.line.as_str())
 }
@@ -219,24 +234,28 @@ impl<T: Transport> Adapter<T> {
         Ok(reply.trim_end_matches('V').parse().ok())
     }
 
-    /// Address one module: its request ID, a receive filter for its reply ID (request + 8), and explicit
-    /// flow control back to it so multi-frame replies continue (as OBDb does for the Kona's modules).
+    /// Address one module: its request ID, a receive filter for its reply ID, and explicit flow control back
+    /// to it so multi-frame replies continue (as OBDb does for the Kona's and the Clarity's modules). 11-bit:
+    /// `7E4`, reply = request + 8. 29-bit: `18DAxxF1`, reply `18DAF1xx` (wiki `adapter-response-format`).
     fn address(&mut self, header: &str) -> Result<()> {
-        let id = u16::from_str_radix(header, 16).ok().filter(|id| *id <= 0x7F7).ok_or_else(|| anyhow::anyhow!("bad 11-bit CAN header '{header}'"))?;
-        for cmd in [format!("ATSH{header}"), format!("ATCRA{:03X}", id + 8), format!("ATFCSH{header}"), "ATFCSD300000".into(), "ATFCSM1".into()] {
+        let reply = reply_id(self.bus, header)?;
+        for cmd in [format!("ATSH{header}"), format!("ATCRA{reply}"), format!("ATFCSH{header}"), "ATFCSD300000".into(), "ATFCSM1".into()] {
             expect_ok(&cmd, &self.send(&cmd)?)?;
         }
         Ok(())
     }
 
     /// Return to functional addressing: automatic flow control, default receive filters (`ATAR`, which
-    /// both the ELM327 and OBDLink document as undoing `ATCRA`), header 7DF. Every reply is verified; all
-    /// three are always attempted. A no-op on non-CAN buses, where carlink never changes the header.
+    /// both the ELM327 and OBDLink document as undoing `ATCRA`), the functional header (`7DF`, or
+    /// `18DB33F1` on 29-bit). Every reply is verified; all three are always attempted. A no-op off CAN,
+    /// where carlink never changes the header.
     pub fn reset_addressing(&mut self) -> Result<()> {
-        if self.bus != Bus::Can11 {
-            return Ok(());
-        }
-        let results = ["ATFCSM0", "ATAR", "ATSH7DF"].map(|c| self.send(c).and_then(|r| expect_ok(c, &r)));
+        let functional = match self.bus {
+            Bus::Can11 => "ATSH7DF",
+            Bus::Can29 => "ATSH18DB33F1",
+            _ => return Ok(()),
+        };
+        let results = ["ATFCSM0", "ATAR", functional].map(|c| self.send(c).and_then(|r| expect_ok(c, &r)));
         for r in results {
             r?;
         }
@@ -244,13 +263,11 @@ impl<T: Transport> Adapter<T> {
         Ok(())
     }
 
-    /// Run `f` with requests addressed physically to 11-bit `header`, listening only to its reply ID
-    /// (header + 8), then return to functional addressing. If that return fails, the result of `f`
+    /// Run `f` with requests addressed physically to `header`, listening only to its reply ID, then return
+    /// to functional addressing. If that return fails, the result of `f`
     /// is still returned, and every later `query` refuses to run until addressing is repaired.
     pub fn with_header<R>(&mut self, header: &str, f: impl FnOnce(&mut Self) -> Result<R>) -> Result<R> {
-        if self.bus != Bus::Can11 {
-            bail!("physical addressing is only supported on 11-bit CAN; this vehicle uses {:?}", self.bus);
-        }
+        reply_id(self.bus, header)?;
         self.dirty = true;
         self.physical = Some(header.to_string());
         let r = self.address(header).and_then(|_| f(self));
@@ -387,10 +404,10 @@ mod tests {
     }
 
     #[test]
-    fn with_header_refuses_non_11_bit_bus() {
+    fn with_header_refuses_a_non_can_bus() {
         let mut a = Adapter::connect(Sim::new("crv-2004").unwrap()).unwrap();
         let err = a.with_header("7E4", |a| a.query("220101")).unwrap_err().to_string();
-        assert!(err.contains("11-bit CAN"), "{err}");
+        assert!(err.contains("only supported on CAN"), "{err}");
         assert!(!a.transport().log.iter().any(|c| c.starts_with("ATSH")));
     }
 
@@ -523,6 +540,35 @@ mod tests {
         assert!(a.transport().log.join(" ").ends_with("ATFCSM0 ATAR ATSH7DF"));
         a.transport_mut().inject("ATSH7DF", "?");
         assert!(a.reset_addressing().is_err());
+    }
+
+    #[test]
+    fn with_header_addresses_a_29_bit_module_and_restores_functional_addressing() {
+        let mut a = Adapter::connect(Sim::new("clarity-phev-2018").unwrap()).unwrap();
+        let r = a.with_header("18DA01F1", |a| a.query("22202A")).unwrap();
+        assert_eq!(r[0].ecu, "18DAF101");
+        let log = a.transport().log.join(" ");
+        assert!(log.contains("ATSH18DA01F1 ATCRA18DAF101 ATFCSH18DA01F1 ATFCSD300000 ATFCSM1 22202A ATFCSM0 ATAR ATSH18DB33F1"), "{log}");
+    }
+
+    #[test]
+    fn a_header_for_the_other_can_id_size_is_refused_before_anything_is_sent() {
+        let mut a = Adapter::connect(Sim::new("clarity-phev-2018").unwrap()).unwrap();
+        let err = a.with_header("7E4", |a| a.query("220101")).unwrap_err().to_string();
+        assert!(err.contains("29-bit"), "{err}");
+        let mut k = Adapter::connect(Sim::new("kona-ev-2020").unwrap()).unwrap();
+        let err = k.with_header("18DA01F1", |a| a.query("22202A")).unwrap_err().to_string();
+        assert!(err.contains("11-bit"), "{err}");
+        for log in [&a.transport().log, &k.transport().log] {
+            assert!(!log.iter().any(|c| c.starts_with("ATSH") && c != "ATSH7DF" && c != "ATSH18DB33F1"), "{log:?}");
+        }
+    }
+
+    #[test]
+    fn reset_addressing_on_29_bit_returns_to_the_functional_header() {
+        let mut a = Adapter::connect(Sim::new("clarity-phev-2018").unwrap()).unwrap();
+        a.reset_addressing().unwrap();
+        assert!(a.transport().log.join(" ").ends_with("ATFCSM0 ATAR ATSH18DB33F1"));
     }
 
     #[test]

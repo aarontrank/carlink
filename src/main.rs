@@ -14,7 +14,7 @@ use std::path::PathBuf;
 #[derive(Parser)]
 #[command(version)]
 struct Cli {
-    /// Serial device, or `sim:<vehicle>` for the built-in simulator, optionally with faults to rehearse: `:engine-off`, `:ignition-off`, `:not-in-car`, `:can29` (Odyssey), combinable (e.g. `sim:odyssey-2016:can29:engine-off`). Default: auto-detect the OBDLink EX.
+    /// Serial device, or `sim:<vehicle>` for the built-in simulator, optionally with faults to rehearse: `:engine-off`, `:ignition-off`, `:not-in-car`, `:can29` (Odyssey), `:battery-worn` (Clarity), combinable (e.g. `sim:odyssey-2016:can29:engine-off`). Default: auto-detect the OBDLink EX.
     #[arg(long, global = true, env = "CARLINK_PORT")]
     port: Option<String>,
     /// History database. Default: ~/.local/share/carlink/carlink.db
@@ -118,7 +118,7 @@ enum Cmd {
     Raw {
         /// 1–7 bytes of hex, e.g. 010C or 220101.
         request: String,
-        /// CAN request header for physical addressing, e.g. 7E4.
+        /// CAN request header for physical addressing: 7E4 (11-bit) or 18DA01F1 (29-bit).
         #[arg(long)]
         header: Option<String>,
     },
@@ -315,10 +315,11 @@ fn run(cli: Cli) -> Result<Value> {
         }
         Cmd::Raw { request, header } => {
             let req = actions::check_raw(&request)?;
+            let header = header.map(|h| h.to_ascii_uppercase());
             if let Some(h) = &header
-                && !(h.len() == 3 && h.chars().all(|c| c.is_ascii_hexdigit()))
+                && !([3, 8].contains(&h.len()) && h.chars().all(|c| c.is_ascii_hexdigit()))
             {
-                return Err(problem("bad_input", format!("header must be 3 hex digits (11-bit CAN), got '{h}'"), "Pass an 11-bit request ID such as 7E4, or leave --header out."));
+                return Err(problem("bad_input", format!("header must be 3 hex digits (11-bit CAN) or 8 (29-bit, 18DAxxF1), got '{h}'"), "Pass a request ID such as 7E4 (11-bit) or 18DA01F1 (29-bit), or leave --header out."));
             }
             let mut a = connect(port, trace)?;
             let msgs = match header {

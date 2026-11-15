@@ -2,7 +2,7 @@
 title: Index
 type: index
 created: 2026-11-07
-updated: 2026-11-08
+updated: 2026-11-13
 ---
 
 # Index
@@ -14,6 +14,8 @@ updated: 2026-11-08
 ## Vehicles
 - [[crv-2004]] — 2004 Honda CR-V (K24A1): ISO 9141-2, PCM only, recalls, maintenance
 - [[odyssey-2016]] — 2016 Honda Odyssey (J35Z8, VCM): CAN 500k, VCM misfire extension 25-061
+- [[clarity-phev-2018]] — 2018 Honda Clarity Plug-in Hybrid: 29-bit CAN, seven OBD ECUs, power modes, battery warranty, TPMS
+- [[clarity-phev-hv-battery]] — Clarity BMS/meter DIDs (22 202A, 2028, 7022) byte map, capacity interpretation
 - [[kona-electric-2020]] — 2020 Hyundai Kona Electric: generic OBD behaviour, ECU map
 - [[kona-ev-bms-pids]] — BMS DIDs 220101–220106 byte map, tested against a real capture
 - [[kona-ev-other-ecus]] — VMCU, TPMS, odometer, HVAC, OBC/LDC
@@ -49,8 +51,8 @@ updated: 2026-11-08
 
 ## Sources
 Raw sources live in `raw/` (OBDLink FRPM rev F, ELM327 datasheet, Wikipedia OBD-II PIDs, JejuSoul,
-evDash and OBDb Kona sources, NHTSA recall/complaint JSON, 2004 CR-V service manual excerpts, Honda
-memos). Pages cite them in their `sources` frontmatter.
+evDash and OBDb Kona and Clarity sources, NHTSA recall/complaint JSON, 2004 CR-V service manual excerpts,
+Honda memos, Clarity service bulletin 17-093 and owner's-manual excerpts). Pages cite them in their `sources` frontmatter.
 
 ## Analyses
 - [[live-data-interpretation]] — λ/O2, catalyst, MAF/load and fuel-trim tests for a shop

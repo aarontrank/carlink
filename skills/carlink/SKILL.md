@@ -1,6 +1,6 @@
 ---
 name: carlink
-description: Diagnose cars through an OBDLink EX adapter with the `carlink` command — read and explain trouble codes and warning lights, check live data, misfires and battery health, compare with earlier visits, clear codes after a repair and verify the fix, and walk a person through resets and relearns (oil life / Maintenance Minder, TPMS, idle learn). In-depth support for the 2004 Honda CR-V, 2016 Honda Odyssey and 2020 Hyundai Kona Electric; basic support for any other OBD-II car. Use when someone asks to scan or diagnose a car, explain a check-engine or other warning light or a trouble code, check the 12 V or EV battery, clear or reset codes, reset a maintenance or TPMS light, or check whether a repair worked.
+description: Diagnose cars through an OBDLink EX adapter with the `carlink` command — read and explain trouble codes and warning lights, check live data, misfires and battery health, compare with earlier visits, clear codes after a repair and verify the fix, and walk a person through resets and relearns (oil life / Maintenance Minder, TPMS, idle learn). In-depth support for the 2004 Honda CR-V, 2016 Honda Odyssey, 2018 Honda Clarity Plug-in Hybrid and 2020 Hyundai Kona Electric; basic support for any other OBD-II car. Use when someone asks to scan or diagnose a car, explain a check-engine or other warning light or a trouble code, check the 12 V or EV battery, clear or reset codes, reset a maintenance or TPMS light, or check whether a repair worked.
 ---
 
 # carlink — diagnose and reset cars with an OBDLink EX
@@ -32,7 +32,7 @@ description: Diagnose cars through an OBDLink EX adapter with the `carlink` comm
 |---|---|
 | "Check engine light is on", "what's wrong with my car", "scan it" | steps 1 → 2 → 3 → 4 |
 | "What does code P0xxx mean?" (no car needed) | `carlink dtc <CODE> --vehicle <id>` |
-| "Is the battery OK?" (Kona: big battery or 12 V; others: 12 V) | steps 1 → 3, then read the findings and `extended` |
+| "Is the battery OK?" (Kona, Clarity: big battery or 12 V; others: 12 V) | steps 1 → 3, then read the findings and `extended` |
 | "Is it misfiring / which cylinder?" | step 5, `carlink tests` |
 | "Clear / reset the codes or the light" | step 6 (always with a yes; if nothing was repaired yet, its first paragraph) |
 | "Did the repair work?" / "Will it pass inspection?" | step 3, then `inspection` and step 6.4 |
@@ -43,7 +43,8 @@ description: Diagnose cars through an OBDLink EX adapter with the `carlink` comm
 
 Ask the person to plug the OBDLink EX into this computer's USB port and into the car's OBD port (under
 the dashboard, driver's side), and to turn the ignition **ON** (skip this if they already told you it is
-plugged in and on). For the Kona: press start with a foot on the brake until **READY** shows. Then run:
+plugged in and on). For the Kona and the Clarity: press start (POWER) with a foot on the brake until
+**READY** shows. Then run:
 
 ```
 carlink probe
@@ -58,8 +59,8 @@ carlink probe
 ## Step 2 — Find out about the car and the problem
 
 Ask, unless you already know:
-- **Which car.** Profile ids: `crv-2004`, `odyssey-2016`, `kona-ev-2020`. Any other car: leave out
-  `--vehicle` (generic OBD-II only).
+- **Which car.** Profile ids: `crv-2004`, `odyssey-2016`, `clarity-phev-2018`, `kona-ev-2020`. Any other
+  car: leave out `--vehicle` (generic OBD-II only).
 - **The VIN**: 17 characters on the windshield (driver's side, bottom corner) or the driver's door
   jamb. carlink needs it to save history and to clear codes. The CR-V and the Kona do not report it
   themselves, so for them you **must** ask — and ask them to read it **off the car**, not from
@@ -67,8 +68,8 @@ Ask, unless you already know:
 - **If the person's VIN and the car's `vin` differ, or any output has an `identity_conflict` that is
   not null, STOP.** The adapter is in a different car than they think. Tell them, and do not scan or
   clear anything until they confirm which car it is in.
-- **The mileage** on the dashboard (if they don't know it, leave out `--odometer-mi`). Kona: always
-  leave it out — the car reports its own.
+- **The mileage** on the dashboard (if they don't know it, leave out `--odometer-mi`). Kona and
+  Clarity: always leave it out — the car reports its own (`extended.odometer_mi`).
 - **The complaint**: what they noticed, which lights are on, when it happens.
 
 ## Step 3 — Scan
@@ -92,7 +93,7 @@ Read the output **in this order**:
 | `scan.monitors[].monitors[]` | each self-test: `name` and `incomplete` (`true` = not finished since the last clear) |
 | `tests.misfire[]` | misfire counts per cylinder (`current` = this drive, `average` = recent drives; `cylinder: 0` = all cylinders together). 0 is normal. `tests` is null on the CR-V: use `carlink tests` (step 5) |
 | `modules[]` | (Kona) **brake, airbag, body and other module codes — they are only here, never in `codes[]`**: `name`, `description` (says which warning light it belongs to: ABS/brake → `IEB`, airbag → `SRS`, tire pressure → `BCM`), `dtcs[]` with `state` (`active` = failing now, `stored`, `pending`, `history`); `refused` = carlink could not read that module |
-| `extended` | (Kona) battery and car data: `soh`, `soc_display`, `cell_delta_v`, `aux_12v`, `tire_*_psi`, `odometer_mi`… (empty on other cars) |
+| `extended` | (Kona) battery and car data: `soh`, `soc_display`, `cell_delta_v`, `aux_12v`, `tire_*_psi`, `odometer_mi`…; (Clarity) `hv_capacity_ah`, `hv_soc`, `cell_delta_v`, `odometer_mi`… (empty on other cars) |
 | `vehicle.recalls`, `vehicle.notes` | recalls to check by VIN at nhtsa.gov/recalls, and what carlink cannot reach on this car |
 | `identity_conflict` | not null = this is not the car you were told: STOP (step 2) |
 | `session_id` | the saved scan (null = not saved, usually because there was no VIN) |
@@ -126,6 +127,16 @@ the finding text). Shape:
   90 % or the 12 V battery is low; with no such finding, give the numbers without judging them.
   `cell_delta_v` is only a health check when `soc_display` is 80 % or more; below that, say the cell
   check needs a charge to 80 % first.
+- Clarity battery: report `hv_capacity_ah` as "X Ah of the 55 Ah a new battery has". carlink adds an
+  advice below 44 Ah and a warning below 36.6 Ah (Honda's warranty-replacement line — the car shows no
+  light for it). If the finding says it reads exactly 55.0 Ah, say the reading is not a health result
+  yet (it restarts at 55.0 after a clear and relearns).
+- Clarity battery warranty: 8 years/100,000 miles from the car's first sale; 10 years/150,000 miles in
+  California and other CARB states. Before you say anything about coverage, ask when the car was first
+  sold and in which state it is registered. Below 36.6 Ah, say the battery **may be eligible** for a
+  warranty replacement if it is still within that warranty, and that Honda decides after a Honda dealer
+  checks it with its own tool. Never say it "qualifies" or "will be replaced". If that warranty has
+  ended, say so plainly.
 - Never recommend clearing codes as a fix. Clearing only turns the light off.
 
 ## Step 5 — Dig deeper when needed
@@ -161,13 +172,17 @@ that, and say so in `--note`.
 **6.1 Ask first.** Tell the person: *"Clearing turns off the warning light and erases the stored
 details of the fault. The car's self-tests restart, so it would fail an emissions inspection until it
 has been driven normally for a few days. If the fault is still there, the light comes back."* For a
-module (Kona), also name the system: *"…and it clears the brake system's stored faults."* Ask:
+module (Kona), also name the system: *"…and it clears the brake system's stored faults."* For the
+Clarity, also say: *"It also resets the high-voltage battery's capacity reading to 55 Ah for a few
+weeks; the current reading (X Ah) is saved in carlink's history."* Ask:
 **"Do you want me to clear them now?"** A yes given before this message does not count: ask again.
 
 **6.2 Clear.** Before you type `--confirm-clear-codes`, you must already have sent the 6.1 message and
 received a yes in this conversation. Then tell the person how to leave the car for the clear, and wait
-for "done". **Hondas and other cars:** engine **OFF**, ignition **ON**. **Kona:** as it was for the
-scan — READY, in Park, parking brake on. If the Kona's clear comes back `refused` or
+for "done". **Hondas and other cars:** engine **OFF**, ignition **ON**. **Clarity:** ON but **not**
+READY — switch the car off, then, foot **off** the brake, press POWER twice (the dashboard lights up,
+READY does not show); in READY its engine can start by itself. **Kona:** as it was for the scan —
+READY, in Park, parking brake on. If the Kona's clear comes back `refused` or
 `not_acknowledged`, the one more try (6.3) is with the car ON but **not** READY: the person switches the
 car off, then — foot **off** the brake — presses the POWER button twice (the dashboard lights up; READY
 does not show).
@@ -183,6 +198,14 @@ carlink clear --vehicle <id> --vin <VIN> --confirm-clear-codes --note "<what was
   a plain `carlink clear` sends nothing. It never clears the `BMS`, `SRS` or `SMK` modules
   (battery-campaign evidence, airbags, smart key): if someone asks for those, do not run the command —
   tell them carlink will not, and that the dealer has to handle them.
+- **Clarity:** carlink refuses to clear while a battery-deterioration code (P0A7F, P1DC7, P144A) is
+  stored, or when the code read was incomplete so it cannot rule them out (`clear_not_allowed`): those
+  codes are the evidence for a warranty battery replacement. If the
+  scan lists one of them, do not ask the 6.1 question: tell the person carlink will not clear them and
+  why, and send them to a Honda dealer. Do not try to get around it.
+- **When carlink refuses a clear**, tell the person the reason its `error` gives, in plain words, and
+  that a clear would not fix anything (the light comes back while the fault is there). Add no reasons
+  of your own.
 - If the person asks to clear a module that has no codes in the scan, tell them there is nothing to
   clear there.
 - If it says `nothing_to_clear`, nothing was sent; read `next_steps` (it lists modules with codes).
@@ -191,7 +214,7 @@ carlink clear --vehicle <id> --vin <VIN> --confirm-clear-codes --note "<what was
 
 | `clear_status` | meaning | what you do |
 |---|---|---|
-| `cleared` | checked by a fresh scan: no codes left (a `permanent` code may still be listed; that is normal) | tell the person; do every `next_steps` item (Hondas: idle learn) |
+| `cleared` | checked by a fresh scan: no codes left (a `permanent` code may still be listed; that is normal) | tell the person; do every `next_steps` item (CR-V, Odyssey: idle learn) |
 | `codes_remain` | codes came straight back from a module that accepted the clear | the fault is still there: go back to diagnosis. **Do not clear again** |
 | `refused` / `not_acknowledged` | a module refused or did not take the clear | check engine off / ignition on / car stopped (Kona: switch to ON, not READY — see 6.2), then you may run the clear **once** more |
 | `unverified` | sent, but the result could not be checked | **do not clear again.** Wait a minute, run `carlink scan` |
@@ -224,8 +247,8 @@ at a time** and wait for "done". A step that is a `carlink …` command is for y
 person. Tell the person anything in `notes` (e.g. that a step is unverified for this car, or needs a
 dealer tool).
 
-After a clear, a Honda can idle high or unevenly, or stall, until the idle learn is done — that is
-expected, and it is why the idle learn is needed.
+After a clear, a Honda (not the Clarity) can idle high or unevenly, or stall, until the idle learn is
+done — that is expected, and it is why the idle learn is needed.
 
 To follow an idle learn, run `carlink watch` while the person does a step that names an rpm or a
 temperature, to confirm it (for a long idle, one run near its end is enough). If the reset gives a
@@ -245,7 +268,7 @@ carlink history vehicles                       # every car seen: its key (VIN), 
 carlink history sessions --vehicle <VIN>       # visits, newest first, with session ids
 carlink history dtcs <VIN>                     # each code: first/last seen, present_in_latest
 carlink history compare <old_id> <new_id>      # new codes, gone codes, readings before/after
-carlink history trend <VIN> <reading>          # e.g. battery_voltage, ltft_b1, misfire_cyl3_current, soh
+carlink history trend <VIN> <reading>          # e.g. battery_voltage, ltft_b1, misfire_cyl3_current, soh, hv_capacity_ah
 carlink history keys <VIN>                     # which readings can be trended
 carlink history show <session_id>              # one full saved scan
 ```
@@ -255,7 +278,8 @@ waiting for the car to re-test). `dtc_count` in `history sessions` counts the co
 that visit: a code in two lists (e.g. stored and permanent) counts twice. Trend points carry `kind` and
 `engine_running`: compare like with like (12.6 V engine off and 14 V engine running are both normal).
 A clear saves two visits (before and after) in the state the clear needed: compare their codes, but
-compare readings only between visits taken in the same state (engine running or off; Kona READY or ON).
+compare readings only between visits taken in the same state (engine running or off; Kona and
+Clarity READY or ON).
 
 ## When a command fails
 
@@ -271,14 +295,14 @@ The JSON has `error`, `error_kind` and `what_to_do`. Tell the person `what_to_do
 | `probe_power_at_obd_port` | adapter on USB but not in the car (or a blown fuse) |
 | `vin_required` | ask for the VIN and pass `--vin` |
 | `vehicle_mismatch` | the adapter is in a different car than `--vin`/`--vehicle` say: check which car |
-| `engine_running` | engine off, ignition on, then retry |
+| `engine_running` | engine off, ignition on, then retry (Clarity: ON but not READY, step 6.2) |
 | `engine_state_unknown` | engine off; for the Kona add `--vehicle kona-ev-2020` |
 | `scan_incomplete` | codes could not all be read: run `carlink scan` again first |
 | `clear_not_allowed` | carlink will not clear that on this car — do not try to get around it |
 | `confirmation_required` | you ran `clear` without `--confirm-clear-codes`: ask the person first |
 | `unknown_vehicle`, `bad_input`, `usage`, `request_not_allowed`, `not_found` | your command was wrong: check this skill or `carlink --help` |
 
-## The three cars
+## The four cars
 
 - **2004 Honda CR-V (`crv-2004`)** — old K-line protocol: connecting takes up to ~10 s. No VIN from the
   car: pass `--vin`. Only the engine computer is reachable: **ABS and airbag codes need a Honda tool**
@@ -287,6 +311,14 @@ The JSON has `error`, `error_kind` and `what_to_do`. Tell the person `what_to_do
   extension 25-061 for vans first sold after 2016-11-07) and torque-converter judder (bulletin
   17-043). `carlink tests` shows misfire counts per cylinder. **Airbag, ABS/VSA, steering and TPMS
   codes need a Honda tool.** After clearing: idle learn, then crank pattern learn.
+- **2018 Honda Clarity Plug-in Hybrid (`clarity-phev-2018`)** — reports its own VIN. Seven computers
+  answer, so a code can come from the battery, charger or hybrid units as well as the engine (`codes[]`
+  says which). carlink reads the high-voltage battery's capacity (`hv_capacity_ah`, 55 Ah new; Honda
+  replaces it under warranty below 36.6 Ah), its 168 cell voltages, and the odometer. Scan in READY
+  (the engine may be off: normal); clear in ON, not READY. **Airbag, ABS/VSA and steering codes need a
+  Honda tool.** Its tire-pressure system has no sensors (it compares wheel speeds), so there is nothing
+  for carlink to read: for the tire light use the TPMS calibration in `carlink resets`. No idle learn.
+  Check recall 23V858 (fuel pump) was done.
 - **2020 Hyundai Kona Electric (`kona-ev-2020`)** — electric: no engine data. carlink reads battery
   health (`soh`, 98 cell voltages, `cell_delta_v`), the 12 V battery, tire pressures and codes from
   13 of its 14 modules. No VIN from the car: pass `--vehicle kona-ev-2020 --vin <VIN>`. The airbag module's
@@ -309,11 +341,13 @@ factory tool (Honda HDS / Hyundai GDS). Say so plainly when asked.
 - **Fuel trim** — how much fuel the computer adds (+) or removes (−); within ±10 % is normal.
 - **Misfire count** — times a cylinder failed to fire; 0 is normal, hundreds in one drive is a fault.
 - **SOH (Kona)** — battery state of health, 100 % = like new. **Cell spread** — highest minus lowest
-  cell voltage; ≤ 0.02 V is healthy (measured at ≥ 80 % charge).
+  cell voltage. Kona: ≤ 0.02 V is healthy (measured at ≥ 80 % charge). Clarity: carlink adds a finding
+  when the spread matters; without one, give the number without judging it.
 
 ## Practice without a car
 
-`--port sim:odyssey-2016` (also `sim:odyssey-2016:can29`, `sim:crv-2004`, `sim:kona-ev-2020`); add
+`--port sim:odyssey-2016` (also `sim:odyssey-2016:can29`, `sim:crv-2004`, `sim:clarity-phev-2018`,
+`sim:kona-ev-2020`), and `sim:clarity-phev-2018:battery-worn` for a worn battery with its codes; add
 `:engine-off`, `:ignition-off` or `:not-in-car` to rehearse those situations (they combine, e.g.
 `sim:odyssey-2016:can29:engine-off`). Put the `--port` on **every** command. Practice runs are saved
 to a separate practice history. Each command starts the simulated car fresh, so codes you cleared are

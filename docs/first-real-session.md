@@ -52,6 +52,23 @@ Do not run `clear` to test anything. Clear only a real code, after the person ag
    in READY or needed the retry in ON (DECISIONS O10). Then change skill step 6.2 to name only the state
    that worked.
 
+## 2018 Honda Clarity Plug-in Hybrid (`clarity-phev-2018`), in READY
+
+1. `carlink --trace ~/carlink-clarity-trace.txt probe`. Expect 29-bit CAN (`ATDPN` A7) and the VIN
+   from the car (`JHMZC5F…J…`).
+2. `carlink --trace ~/carlink-clarity-trace.txt scan --vehicle clarity-phev-2018`, then check:
+   - `scan.ecus`: OBDb's captures had seven (`18DAF101`, `02`, `06`, `0E`, `15`, `16`, `2A`). Record the
+     real list on wiki `clarity-phev-2018`, and which ECU answered `0902` (the VIN) in the trace;
+   - `extended`: `odometer_mi` against the dashboard, `hv_soc` against the battery gauge, and
+     `hv_capacity_ah` (55 Ah new; record it — wiki `clarity-phev-hv-battery`);
+   - no "Vehicle-specific data partly unavailable" finding. If there is one, the trace shows which
+     29-bit request was refused or unanswered.
+3. Run the scan once more with the car ON but not READY (POWER pressed twice without the brake). Record
+   whether the BMS (`01`, `16`) and the meter (`60`) still answer: the clear (skill step 6.2) is done in
+   that state.
+4. `carlink --trace ~/carlink-clarity-trace.txt tests --vehicle clarity-phev-2018` with the engine
+   having run this trip. Record whether misfire counts come back (the simulator assumes standard MIDs).
+
 ## After each car
 
 For each surprise: correct the wiki page it contradicts (and mark the contradiction, `kb/schema.md`),

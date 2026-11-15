@@ -50,3 +50,10 @@ required. [[carlink-cli]]: a K-line ECU silent to 03 counts as "no codes" only w
 ## [2026-11-08] research | Kona power states
 Source: raw/hyundai-kona-electric-erg-power-button.md (Hyundai's Kona Electric Emergency Response Guide). [[kona-electric-2020]] gained the
 OFF → ACC → ON → OFF button cycle (no brake) vs READY (brake), used by the skill's clear step.
+
+## [2026-11-13] ingest | 2018 Honda Clarity Plug-in Hybrid
+Sources: raw/obdb-honda-clarity-2026-11-13.md (OBDb signal set and real 2018 captures, offsets verified
+against OBDb's expected values), raw/honda/clarity-phev-2018-sb-17-093-pdi.md (Honda S/B 17-093: 55 Ah new,
+36.6 Ah warranty line, indirect TPMS), raw/honda/clarity-phev-2018-owners-manual-excerpts.md, ERG,
+service-information P144A page, owner capacity reports, NHTSA recalls/complaints and vPIC decodes.
+New pages [[clarity-phev-2018]] and [[clarity-phev-hv-battery]]; [[overview]] and [[index]] updated.

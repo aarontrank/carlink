@@ -2,12 +2,12 @@
 title: Overview
 type: overview
 created: 2026-11-07
-updated: 2026-11-08
+updated: 2026-11-13
 ---
 
 # Overview
 
-This wiki is what an agent needs to diagnose Aaron's three cars through an [[obdlink-ex]] using
+This wiki is what an agent needs to diagnose Aaron's four cars through an [[obdlink-ex]] using
 [[carlink-cli]]. Everything here was researched on 2026-11-07 and **nothing has yet been observed on
 the real cars**; the first scans should confirm or correct the vehicle pages.
 
@@ -33,6 +33,9 @@ rules of thumb, not standards ([[diagnostic-thresholds]]).
 - **[[odyssey-2016]]** — CAN; PCM at 7E8 also handles the transmission. Headline issue: VCM oil
   burning → misfires on cylinders 1–3, covered by Honda extension 25-061 (10 yr from original sale /
   150k mi). Torque-converter judder → bulletin 17-043. Timing belt at Maintenance Minder code 4.
+- **[[clarity-phev-2018]]** — plug-in hybrid on 29-bit CAN; seven ECUs answer generic OBD, the engine
+  computer is `18DAF10E`. The value is the battery capacity ([[clarity-phev-hv-battery]]): 55 Ah new,
+  warranty replacement below 36.6 Ah (Honda S/B 17-093) with no warning light. Recall 23V858 (fuel pump).
 - **[[kona-electric-2020]]** — almost nothing on generic OBD; the value is in BMS DIDs
   ([[kona-ev-bms-pids]]): SOC, SOH, 98 cell voltages, temperatures, lifetime kWh, 12 V, isolation.
   Battery-health interpretation in [[kona-ev-battery-health]]; confirm recall **21V-127** (LG pack

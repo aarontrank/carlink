@@ -2,7 +2,7 @@
 title: carlink CLI
 type: entity
 created: 2026-11-07
-updated: 2026-11-08
+updated: 2026-11-13
 sources:
   - code:carlink
 tags: [carlink, tooling]
@@ -39,15 +39,22 @@ are in the repo's `DECISIONS.md`.
   timeout the adapter is interrupted with a space and drained; a bare CR is never sent.
 - A lost link (USB disconnect, or two timeouts in a row, e.g. a request and its retry) stops all traffic: the
   command fails with `adapter_disconnected` / `adapter_timeout` instead of returning a partial scan.
-- Physical addressing (`with_header`): `ATSH<id> ATCRA<id+8> ATFCSH<id> ATFCSD300000 ATFCSM1`, then
-  restore `ATFCSM0 ATAR ATSH7DF`; a failed restore blocks every later request until repaired.
-- Engine ECU (bare history keys, findings): `7E8`, `18DAF110`, `18DAF111`, or K-line `10`.
+- Physical addressing (`with_header`): 11-bit `ATSH<id> ATCRA<id+8> ATFCSH<id> ATFCSD300000 ATFCSM1`,
+  restored with `ATFCSM0 ATAR ATSH7DF`; 29-bit `ATSH18DAxxF1 ATCRA18DAF1xx ATFCSH18DAxxF1 ATFCSD300000
+  ATFCSM1`, restored with `ATFCSM0 ATAR ATSH18DB33F1`. A header of the other size is refused before
+  anything is sent; a failed restore blocks every later request until repaired.
+- Engine ECU (bare history keys, findings): `7E8`, `18DAF110`, `18DAF111`, the Clarity's `18DAF10E`, or
+  K-line `10`.
+- Before a clear the engine must be off: every module that reports rpm must report 0.
 
 ## Vehicle-specific
 
 - [[kona-electric-2020]]: BMS 220101–220105 at 7E4 (cells checked against the BMS summary before any
   spread is reported), VMCU 2102 at 7E2, TPMS 22C00B at 7A0, odometer 22B002 at 7C6
   ([[kona-ev-bms-pids]], [[kona-ev-other-ecus]]); module codes from 14 modules ([[kona-ev-modules]]).
+- [[clarity-phev-2018]]: BMS 22 202A and 2028 at `18DA01F1` and `18DA16F1` (capacity, SOC, 168 cells),
+  odometer 22 7022 at `18DA60F1` ([[clarity-phev-hv-battery]]); capacity judged against Honda's 36.6 Ah
+  warranty line; no clear while P0A7F, P1DC7 or P144A is stored.
 - [[crv-2004]], [[odyssey-2016]]: generic OBD-II, service 06, known-code notes, recalls; no modules
   beyond the PCM are reachable ([[crv-2004-modules]], [[odyssey-2016-modules]]).
 
@@ -56,5 +63,5 @@ are in the repo's `DECISIONS.md`.
 Everything above runs against the built-in simulator, which models adapter faults and the module
 behaviours observed in third-party captures. `--trace <file>` records every request and raw reply, and
 the repository's `docs/first-real-session.md` is the per-car checklist. The first real sessions should confirm, per car:
-protocol (Odyssey 11- or 29-bit), responding ECUs, whether the explicit flow control and `ATAR`
+protocol (Odyssey 11- or 29-bit), responding ECUs (Clarity: seven expected), whether the explicit flow control and `ATAR`
 restore behave as documented, and the Kona rear TPMS order.

@@ -34,13 +34,13 @@ pub fn check_raw(cmd: &str) -> Result<String> {
     Ok(hex)
 }
 
-/// Combustion engines must positively report 0 rpm; an EV reports no rpm at all. Any car reporting
-/// rpm above 0 is refused, whatever profile it was identified as.
+/// Combustion engines must positively report 0 rpm; an EV reports no rpm at all. Any car on which any
+/// module reports rpm above 0 is refused, whatever profile it was identified as.
 pub fn check_engine_off<T: Transport>(a: &mut Adapter<T>, ev: bool) -> Result<()> {
-    let rpm = a.query("010C")?.into_iter().find_map(|m| match m.data[..] {
+    let rpm = a.query("010C")?.into_iter().filter_map(|m| match m.data[..] {
         [0x41, 0x0C, ref d @ ..] => obd::decode_pid(0x0C, d).map(|r| r.value),
         _ => None,
-    });
+    }).reduce(f64::max);
     match rpm {
         None if ev => Ok(()),
         None => Err(problem(
@@ -114,6 +114,24 @@ fn modules_with_codes(before: &Report) -> Vec<&'static Module> {
 /// also resets readiness monitors). A module is cleared only when named, or with `all` (engine + every
 /// module that has codes): the person must agree to each system by name, and some are safety systems.
 pub fn resolve_targets(before: &Report, only: &[String]) -> Result<Vec<Target>> {
+    let targets = requested_targets(before, only)?;
+    let (kept, why) = before.vehicle.map(|v| v.kept_codes).unwrap_or((&[], ""));
+    if kept.is_empty() || !targets.iter().any(|t| matches!(t, Target::Engine)) {
+        return Ok(targets);
+    }
+    // Service 04 cannot clear a permanent code, so only stored or pending ones are at stake.
+    let held: Vec<&str> = kept.iter().copied().filter(|k| before.scan.dtcs.iter().any(|d| d.code == *k && d.kind != "permanent")).collect();
+    let refusal = if !held.is_empty() {
+        format!("carlink will not clear the engine codes while {} {} stored or pending: {why}", held.join(", "), if held.len() == 1 { "is" } else { "are" })
+    } else if !before.codes_complete {
+        format!("carlink will not clear the engine codes when the code read was incomplete, because it cannot rule out {}: {why}", kept.join(", "))
+    } else {
+        return Ok(targets);
+    };
+    Err(problem("clear_not_allowed", refusal, "Leave these codes for the dealer to diagnose. Nothing was cleared."))
+}
+
+fn requested_targets(before: &Report, only: &[String]) -> Result<Vec<Target>> {
     let modules: &'static [Module] = before.vehicle.map(|v| v.modules).unwrap_or(&[]);
     let engine_refused = before.vehicle.and_then(|v| v.obd_clear_refused);
     let named = !only.is_empty() && !only.iter().any(|n| n.eq_ignore_ascii_case("all"));
@@ -408,6 +426,13 @@ mod tests {
     }
 
     #[test]
+    fn rpm_from_any_module_counts_not_only_the_first_to_answer() {
+        let mut a = Adapter::connect(Sim::from_spec("clarity-phev-2018:engine-off").unwrap()).unwrap();
+        a.transport_mut().set_pid(0x2A, 0x0C, &[0x12, 0xC0]);
+        assert_eq!(crate::problem::find(&check_engine_off(&mut a, false).unwrap_err()).unwrap().kind, "engine_running");
+    }
+
+    #[test]
     fn unreadable_rpm_is_refused_and_mentions_vehicle_flag() {
         let mut a = adapter("crv-2004");
         a.transport_mut().remove_pid(0x10, 0x0C);
@@ -444,6 +469,52 @@ mod tests {
 
     fn kind(e: anyhow::Error) -> &'static str {
         crate::problem::find(&e).map(|p| p.kind).unwrap_or("none")
+    }
+
+    #[test]
+    fn a_clarity_clear_goes_out_on_29_bit_and_is_verified() {
+        let db = Store::open_in_memory().unwrap();
+        let mut a = Adapter::connect(Sim::from_spec("clarity-phev-2018:engine-off").unwrap()).unwrap();
+        let out = clear_with_history(&mut a, &db, &ident("clarity-phev-2018"), &[], None).unwrap();
+        assert_eq!(out["clear_status"], "cleared", "{out}");
+        assert!(a.transport().log.join(" ").contains("ATSH18DB33F1 04"));
+    }
+
+    #[test]
+    fn honda_battery_deterioration_codes_are_kept_for_the_dealer() {
+        for (code, names) in [(0x0A7Fu16, vec![]), (0x1DC7, vec!["engine"]), (0x144A, vec!["all"])] {
+            let db = Store::open_in_memory().unwrap();
+            let mut sim = Sim::from_spec("clarity-phev-2018:engine-off").unwrap();
+            sim.set_stored(0x01, &[code]);
+            let mut a = Adapter::connect(sim).unwrap();
+            let err = clear_with_history(&mut a, &db, &ident("clarity-phev-2018"), &only(&names), None).unwrap_err();
+            let p = crate::problem::find(&err).unwrap();
+            assert_eq!(p.kind, "clear_not_allowed", "{code:04X}");
+            assert!(p.message.contains("warranty") && p.message.contains("stored or pending"), "{}", p.message);
+            assert!(!a.transport().log.contains(&"04".to_string()));
+            assert!(sessions(&db).is_empty(), "a refused clear records nothing");
+        }
+    }
+
+    #[test]
+    fn a_kept_code_the_scan_could_not_read_still_blocks_a_named_engine_clear() {
+        let db = Store::open_in_memory().unwrap();
+        let mut sim = Sim::from_spec("clarity-phev-2018:battery-worn:engine-off").unwrap();
+        sim.inject("03", "18 DA F1 0E 02 43 00");
+        let mut a = Adapter::connect(sim).unwrap();
+        let err = clear_with_history(&mut a, &db, &ident("clarity-phev-2018"), &only(&["engine"]), None).unwrap_err();
+        assert_eq!(kind(err), "clear_not_allowed");
+        assert!(!a.transport().log.contains(&"04".to_string()));
+    }
+
+    #[test]
+    fn a_kept_code_left_only_as_permanent_does_not_block_other_clears() {
+        let db = Store::open_in_memory().unwrap();
+        let mut sim = Sim::from_spec("clarity-phev-2018:engine-off").unwrap();
+        sim.set_permanent(0x01, &[0x0A7F]);
+        let mut a = Adapter::connect(sim).unwrap();
+        let out = clear_with_history(&mut a, &db, &ident("clarity-phev-2018"), &[], None).unwrap();
+        assert_eq!(out["clear_status"], "cleared", "{out}");
     }
 
     #[test]
