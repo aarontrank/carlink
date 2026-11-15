@@ -387,3 +387,10 @@ fn raw_reads_a_29_bit_module_by_its_header() {
     assert!(ok, "{r}");
     assert_eq!(r["messages"][0]["ecu"], "18DAF101");
 }
+
+#[test]
+fn recalls_for_an_unknown_vehicle_is_refused() {
+    let out = Command::new(env!("CARGO_BIN_EXE_carlink")).args(["recalls", "--vehicle", "civic-2010"]).output().unwrap();
+    let v: Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!((out.status.code(), kind(&v)), (Some(1), "unknown_vehicle"));
+}

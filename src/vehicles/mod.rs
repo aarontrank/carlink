@@ -40,6 +40,9 @@ pub struct Profile {
     /// Wiki page (`kb/wiki/<name>.md` in the carlink repo) with everything known about this car.
     pub wiki: &'static str,
     pub recalls: &'static [&'static str],
+    /// NHTSA's (make, model, model year) for its recall lookup: the model must be NHTSA's exact name.
+    #[serde(skip)]
+    pub nhtsa: (&'static str, &'static str, u16),
     pub notes: &'static [&'static str],
     /// Extra steps after a successful clear on this car.
     pub after_clear: &'static [&'static str],

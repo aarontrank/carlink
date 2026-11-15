@@ -114,6 +114,13 @@ enum Cmd {
         #[arg(long)]
         vehicle: String,
     },
+    /// Recalls NHTSA lists for the car's make, model and year (needs the internet; sends only those three,
+    /// never the VIN), merged with carlink's own list. It cannot tell whether a recall was done on this car.
+    Recalls {
+        /// Vehicle profile (see `vehicles`), e.g. kona-ev-2020.
+        #[arg(long)]
+        vehicle: String,
+    },
     /// Send one read-only request (services 01 02 03 06 07 09 0A 18 19 21 22) and show the replies.
     Raw {
         /// 1–7 bytes of hex, e.g. 010C or 220101.
@@ -312,6 +319,10 @@ fn run(cli: Cli) -> Result<Value> {
         Cmd::Resets { vehicle } => {
             let p = profile(Some(&vehicle))?.expect("profile given");
             json!({"vehicle": p.name, "resets": vehicles::resets(p)})
+        }
+        Cmd::Recalls { vehicle } => {
+            let p = profile(Some(&vehicle))?.expect("profile given");
+            json!(carlink::recalls::lookup(p, carlink::recalls::fetch(&carlink::recalls::url(carlink::recalls::NHTSA, p))))
         }
         Cmd::Raw { request, header } => {
             let req = actions::check_raw(&request)?;

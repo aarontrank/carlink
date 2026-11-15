@@ -10,6 +10,7 @@ pub const PROFILE: Profile = Profile {
     name: "2016 Honda Odyssey",
     powertrain: Powertrain::Gasoline,
     wiki: "odyssey-2016",
+    nhtsa: ("honda", "odyssey", 2016),
     recalls: &[
         "23V858: fuel pump.",
         "16V417: fuel tank welds.",

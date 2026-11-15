@@ -25,6 +25,7 @@ are in the repo's `DECISIONS.md`.
 | `clear` | Engine/emissions (service 04, functional) by default; modules (UDS `14 FF FF FF` / KWP `14 FF 00`, physical) only when named. Needs `--confirm-clear-codes` and a VIN; refuses on identity conflict, running engine, incomplete code read; Kona: never 04, never BMS/SRS/SMK. Outcome only from a fresh scan | [[clearing-codes]], [[uds-module-dtcs]], [[kona-ev-modules]] |
 | `dtc` | Validated code → SAE description (OBDex, CC0), J2012 range, vehicle note | [[dtc-format]] |
 | `resets` | Per-vehicle procedures; only code clearing is done by carlink | [[kona-ev-resets]], [[honda-maintenance-minder]], [[odyssey-2016-tpms-calibration]], [[honda-idle-relearn]] |
+| `recalls` | NHTSA's recall list for the profile's make, model and year (the only command that uses the internet; via the system's `curl`, never sends the VIN), merged with the profile's list; falls back to that list offline. Cannot tell whether a recall was done on a car | [[nhtsa-recalls-api]] |
 | `raw` | One read-only request (01 02 03 06 07 09 0A 18 19 21 22), optional 11-bit header | [[adapter-safety]] |
 | `history` | vehicles / sessions / show / trend / keys / dtcs / compare over SQLite (`~/.local/share/carlink/carlink.db`; simulator runs go to `simulator.db`) | — |
 

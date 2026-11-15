@@ -57,3 +57,9 @@ against OBDb's expected values), raw/honda/clarity-phev-2018-sb-17-093-pdi.md (H
 36.6 Ah warranty line, indirect TPMS), raw/honda/clarity-phev-2018-owners-manual-excerpts.md, ERG,
 service-information P144A page, owner capacity reports, NHTSA recalls/complaints and vPIC decodes.
 New pages [[clarity-phev-2018]] and [[clarity-phev-hv-battery]]; [[overview]] and [[index]] updated.
+
+## [2026-11-15] research | NHTSA recalls API
+Sources: raw/nhtsa/recalls-api-model-names-2026-11-15.md (model-name and VIN-endpoint probes),
+raw/nhtsa/recalls-hyundai-kona-electric-2020-2026-11-15.json. New page [[nhtsa-recalls-api]] for the new
+`carlink recalls` command; [[carlink-cli]] and [[index]] updated. A wrong model name returns 0 recalls
+with a success message, so each profile pins NHTSA's name.

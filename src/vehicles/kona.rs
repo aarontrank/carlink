@@ -36,11 +36,12 @@ pub const PROFILE: Profile = Profile {
     name: "2020 Hyundai Kona Electric",
     powertrain: Powertrain::Ev,
     wiki: "kona-electric-2020",
+    nhtsa: ("hyundai", "kona electric", 2020),
     recalls: &[
-        "21V-127 (Hyundai 200): LG Nanjing cells with folded anode tabs — HV battery pack replacement for cars built 2018-08-28 to 2020-03-02. Confirm it was done.",
+        "21V-127 (Hyundai 200): LG Nanjing cells with folded anode tabs — HV battery pack replacement for cars built 2018-08-28 to 2020-03-02.",
         "20V-630 (Hyundai 196): BMS software update and battery inspection.",
         "20V-748 (Hyundai 199): integrated electronic brake (IEB) software.",
-        "26V-728 (Hyundai 311): airbag control unit software — filed 2026-11-03, likely still open.",
+        "26V-728 (Hyundai 311): airbag control unit software — filed 2026-11-03.",
         "TSB 22-EV-001H-1: motor/reduction-gear rumble.",
     ],
     notes: &[

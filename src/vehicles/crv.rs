@@ -14,11 +14,13 @@ pub const PROFILE: Profile = Profile {
     name: "2004 Honda CR-V",
     powertrain: Powertrain::Gasoline,
     wiki: "crv-2004",
+    nhtsa: ("honda", "cr-v", 2004),
     recalls: &[
-        "Takata airbag inflators (driver and passenger; many campaigns) — confirm completion by VIN at nhtsa.gov/recalls.",
+        "Takata airbag inflators, driver and passenger (19V182, 19V499, 19V501, 18V268, 15V320, 15V370, 14V700, 14V353) — confirm completion by VIN at nhtsa.gov/recalls.",
         "12V486 / 20V768: driver power-window master switch can melt.",
         "12V136: low-beam headlights.",
         "04V255: airbag wiring harness.",
+        "07E104: Safelite replacement side/rear glass (DOT-430) that may not shatter safely — only if that glass was fitted.",
     ],
     notes: &[
         "ISO 9141-2 K-line; only the PCM (header 48 6B 10) answers. Protocol search takes several seconds.",

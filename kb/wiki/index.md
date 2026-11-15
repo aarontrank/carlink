@@ -38,6 +38,7 @@ updated: 2026-11-13
 - [[obd2-mode06]] — service 06 on CAN and K-line: records, MIDs, TIDs, UASID scaling, verdicts
 - [[uds-module-dtcs]] — reading and clearing module codes (UDS 19/14, KWP 18/14), and what not to clear
 - [[readiness-monitors]] — PID 01 bit layout and inspection rules
+- [[nhtsa-recalls-api]] — NHTSA's keyless recall lookup by make/model/year: what it does not say, exact model names
 - [[dtc-format]] — DTC encoding on CAN vs K-line
 - [[clearing-codes]] — what service 04 erases and the consequences
 - [[diagnostic-thresholds]] — rules of thumb for live data

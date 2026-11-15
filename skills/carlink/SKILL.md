@@ -31,6 +31,7 @@ description: Diagnose cars through an OBDLink EX adapter with the `carlink` comm
 | The person asks… | Go to |
 |---|---|
 | "Check engine light is on", "what's wrong with my car", "scan it" | steps 1 → 2 → 3 → 4 |
+| "Any recalls?", "open recalls on my car?" (no car needed) | the Recalls section |
 | "What does code P0xxx mean?" (no car needed) | `carlink dtc <CODE> --vehicle <id>` |
 | "Is the battery OK?" (Kona, Clarity: big battery or 12 V; others: 12 V) | steps 1 → 3, then read the findings and `extended` |
 | "Is it misfiring / which cylinder?" | step 5, `carlink tests` |
@@ -117,6 +118,8 @@ the finding text). Shape:
 > It would not pass an emissions inspection right now (check-engine light on). Recall to check:
 > 23V858 (fuel pump).
 
+- After a scan of a car with a profile, also run `carlink recalls` (the Recalls section) and report it
+  after the problems.
 - Explain codes from `description`, `vehicle_note` and the findings. If both are null: "this is a
   manufacturer-specific code; it needs the factory service information".
 - carlink cannot see whether the check-engine light is **flashing**: with any misfire code, ask.
@@ -318,17 +321,44 @@ The JSON has `error`, `error_kind` and `what_to_do`. Tell the person `what_to_do
   (the engine may be off: normal); clear in ON, not READY. **Airbag, ABS/VSA and steering codes need a
   Honda tool.** Its tire-pressure system has no sensors (it compares wheel speeds), so there is nothing
   for carlink to read: for the tire light use the TPMS calibration in `carlink resets`. No idle learn.
-  Check recall 23V858 (fuel pump) was done.
+  Recall 23V858 (fuel pump): the person checks by VIN that it was done.
 - **2020 Hyundai Kona Electric (`kona-ev-2020`)** — electric: no engine data. carlink reads battery
   health (`soh`, 98 cell voltages, `cell_delta_v`), the 12 V battery, tire pressures and codes from
   13 of its 14 modules. No VIN from the car: pass `--vehicle kona-ev-2020 --vin <VIN>`. The airbag module's
-  codes are **not** readable by carlink. Check recall **21V-127** (battery pack replacement) was done.
+  codes are **not** readable by carlink. Recall **21V-127** (battery pack replacement): the person checks by VIN that it was done.
+
+## Recalls
+
+```
+carlink recalls --vehicle <id>
+```
+
+No car or adapter needed, but it needs the internet: it asks NHTSA for the recalls filed for that
+model and year (it never sends the VIN). It works only for the four profiles.
+
+- **Any `warnings` item that says to park outside or not to drive: say it first**, before the list, in
+  one plain sentence, adding that it applies only until that recall's repair is done.
+- Report each item of `recalls[]` as its `campaign`, the `component` in plain words, and one sentence
+  from `summary` (it may name the build dates the recall covers; carlink cannot tell if this car's build
+  date is inside them). If a `carlink_list` line names the same campaign (`23V858` is `23V-858`), add
+  what it says, such as the build dates it covers.
+- Name every campaign in `carlink_only` as a recall to check, and then do not say NHTSA lists no
+  recalls: its reply missed one that carlink knows.
+- **Never say a recall is open, done or not needed on this car, and never say "no open recalls".**
+  carlink cannot know: tell the person to check the VIN at nhtsa.gov/recalls or ask a dealer
+  (`open_status`). Recall repairs are free at the brand's dealer.
+- Only when `"source": "nhtsa"` and `recalls[]` and `carlink_only` are both empty: "NHTSA lists no
+  recalls for this model and year".
+- `"source": "carlink"` means NHTSA could not be reached: say that this is carlink's own list, which may
+  miss newer recalls and NHTSA's current safety advice (such as parking outside), and give each
+  `carlink_list` item. Do not retry more than twice (rule 5).
 
 ## What carlink cannot do
 
 Program or code modules, register new TPMS sensors or keys, open diagnostic sessions, reset airbag
 crash data, read Honda ABS/airbag/steering/TPMS modules, read the Kona airbag module, or replace the
-factory tool (Honda HDS / Hyundai GDS). Say so plainly when asked.
+factory tool (Honda HDS / Hyundai GDS), or tell whether a recall was done on a car. Say so plainly when
+asked.
 
 ## Words you may need to explain
 
