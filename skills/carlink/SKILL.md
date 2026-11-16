@@ -54,24 +54,33 @@ carlink probe
 - `"ok": true` → go on. Note `vin` and `vehicle.id` if they are there (`vehicle` is null when the car
   does not report its VIN: use the profile id of the car the person names, step 2). A failed `vin`
   check under `"ok": true` only means the car does not report its VIN (normal on the CR-V and the
-  Kona): ask for it in step 2.
+  Kona): ask for it in step 2, unless the car is named in `carlink cars`.
 - `"ok": false` → tell the person the `what_to_do` of the failed check, wait, run `carlink probe` again.
 
 ## Step 2 — Find out about the car and the problem
 
 Ask, unless you already know:
-- **Which car.** Profile ids: `crv-2004`, `odyssey-2016`, `clarity-phev-2018`, `kona-ev-2020`. Any other
-  car: leave out `--vehicle` (generic OBD-II only).
-- **The VIN**: 17 characters on the windshield (driver's side, bottom corner) or the driver's door
-  jamb. carlink needs it to save history and to clear codes. The CR-V and the Kona do not report it
-  themselves, so for them you **must** ask — and ask them to read it **off the car**, not from
-  paperwork: carlink cannot check it against these cars. If `probe` showed a `vin`, use that.
-- **If the person's VIN and the car's `vin` differ, or any output has an `identity_conflict` that is
-  not null, STOP.** The adapter is in a different car than they think. Tell them, and do not scan or
-  clear anything until they confirm which car it is in.
+- **Which car.** First run `carlink cars` (in practice, with the same `--port sim:…` as the other
+  commands: practice names are kept apart from real ones). It lists every car carlink knows, with its
+  `vin`, `nickname`, `plate` and `profile`. **If the person names one of them** (by its nickname, its
+  plate or its VIN), use `--car <that name>` in place of `--vin` and `--vehicle` in `scan` and `clear`,
+  and the name in place of the VIN in `history`, and skip the VIN question below: carlink looks it up.
+  The other commands (`tests`, `watch`, `recalls`, `resets`, `dtc`) take `--vehicle <its profile>`.
+  For a car not in the list: profile ids are `crv-2004`, `odyssey-2016`, `clarity-phev-2018`,
+  `kona-ev-2020`. Any other car: leave out `--vehicle` (generic OBD-II only).
+- **The VIN** (not for a car named from `carlink cars`): 17 characters on the windshield (driver's
+  side, bottom corner) or the driver's door jamb. carlink needs it to save history and to clear codes.
+  The CR-V and the Kona do not report it themselves, so for them you **must** ask — and ask them to
+  read it **off the car**, not from paperwork: carlink cannot check it against these cars. If `probe`
+  showed a `vin`, use that.
 - **The mileage** on the dashboard (if they don't know it, leave out `--odometer-mi`). Kona and
   Clarity: always leave it out — the car reports its own (`extended.odometer_mi`).
 - **The complaint**: what they noticed, which lights are on, when it happens.
+
+**If the person's VIN (or the VIN of the car they named) and the `vin` that `probe` or a scan shows
+differ, or any output has an `identity_conflict` that is not null, STOP.** The adapter is in a
+different car than they think. Tell them, and do not scan or clear anything until they confirm which
+car it is in.
 
 ## Step 3 — Scan
 
@@ -80,7 +89,16 @@ carlink scan --vehicle <id> --vin <VIN> --odometer-mi <miles> --note "<complaint
 ```
 
 Leave out `--vehicle` for a car without a profile. Example:
-`carlink scan --vehicle odyssey-2016 --vin 5FNRL5H60GB000001 --odometer-mi 98000 --note "CEL on, rough idle"`
+`carlink scan --vehicle odyssey-2016 --vin 5FNRL5H60GB000001 --odometer-mi 98000 --note "CEL on, rough idle"`,
+or for a named car `carlink scan --car van --odometer-mi 98000 --note "CEL on, rough idle"`.
+
+**Naming a car.** After the first saved scan of a car that has no nickname in `carlink cars`, ask the
+person whether they want to give it a nickname (and its licence plate) so next time they need not read
+out the VIN. Use only the words they choose, with the same `--port` as the scan:
+`carlink name <VIN> --nickname <name> --plate <plate>` (either one alone is fine; carlink saves the
+plate without spaces or dashes). To change one later:
+`carlink name <VIN, nickname or plate> --nickname <new>` (or `--plate <new>`, `--remove-nickname`,
+`--remove-plate`); a new one replaces the old.
 
 Read the output **in this order**:
 
@@ -192,6 +210,7 @@ does not show).
 
 ```
 carlink clear --vehicle <id> --vin <VIN> --confirm-clear-codes --note "<what was repaired>"
+carlink clear --car <name> --confirm-clear-codes --note "<what was repaired>"     # a named car
 ```
 
 - By default it clears the **engine/emissions codes only**.
@@ -264,7 +283,8 @@ and ask them to check before going on. (Not in practice: the simulator's reading
 
 ## History
 
-Stored per car, by VIN.
+Stored per car, by VIN. Wherever a command below takes `<VIN>`, a car's nickname or plate from
+`carlink cars` works too.
 
 ```
 carlink history vehicles                       # every car seen: its key (VIN), profile, last visit
@@ -297,6 +317,9 @@ The JSON has `error`, `error_kind` and `what_to_do`. Tell the person `what_to_do
 | `vehicle_not_responding`, `probe_vehicle` | ignition off, or the adapter not pushed fully into the car's port |
 | `probe_power_at_obd_port` | adapter on USB but not in the car (or a blown fuse) |
 | `vin_required` | ask for the VIN and pass `--vin` |
+| `unknown_car` | no car has that nickname or plate: run `carlink cars`, or ask for the VIN |
+| `ambiguous_car` | that name fits two cars: use the VIN, and ask the person to rename one of them |
+| `name_taken` | another car already has that nickname or plate: tell the person which car, and ask for another name. Never remove it from the other car unless they ask |
 | `vehicle_mismatch` | the adapter is in a different car than `--vin`/`--vehicle` say: check which car |
 | `engine_running` | engine off, ignition on, then retry (Clarity: ON but not READY, step 6.2) |
 | `engine_state_unknown` | engine off; for the Kona add `--vehicle kona-ev-2020` |
@@ -308,7 +331,7 @@ The JSON has `error`, `error_kind` and `what_to_do`. Tell the person `what_to_do
 ## The four cars
 
 - **2004 Honda CR-V (`crv-2004`)** — old K-line protocol: connecting takes up to ~10 s. No VIN from the
-  car: pass `--vin`. Only the engine computer is reachable: **ABS and airbag codes need a Honda tool**
+  car: pass `--vin` (or `--car`). Only the engine computer is reachable: **ABS and airbag codes need a Honda tool**
   (or the service manual's blink-code procedure). After clearing: idle learn.
 - **2016 Honda Odyssey (`odyssey-2016`)** — known for misfires on cylinders 1–3 from VCM (warranty
   extension 25-061 for vans first sold after 2016-11-07) and torque-converter judder (bulletin
@@ -324,7 +347,7 @@ The JSON has `error`, `error_kind` and `what_to_do`. Tell the person `what_to_do
   Recall 23V858 (fuel pump): the person checks by VIN that it was done.
 - **2020 Hyundai Kona Electric (`kona-ev-2020`)** — electric: no engine data. carlink reads battery
   health (`soh`, 98 cell voltages, `cell_delta_v`), the 12 V battery, tire pressures and codes from
-  13 of its 14 modules. No VIN from the car: pass `--vehicle kona-ev-2020 --vin <VIN>`. The airbag module's
+  13 of its 14 modules. No VIN from the car: pass `--vehicle kona-ev-2020 --vin <VIN>` (or `--car`). The airbag module's
   codes are **not** readable by carlink. Recall **21V-127** (battery pack replacement): the person checks by VIN that it was done.
 
 ## Recalls

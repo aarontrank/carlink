@@ -15,6 +15,8 @@ factory tool). Any OBD-II car gets the generic diagnosis.
 ./install.sh                                   # build, install ~/.local/bin/carlink, link the skill
 carlink probe                                  # setup checklist: adapter, power at the port, car, VIN
 carlink scan --vehicle odyssey-2016 --vin <VIN> --odometer-mi 98000
+carlink name <VIN> --nickname van --plate 8ABC123 # then --car van (or the plate) instead of --vin
+carlink cars                                   # every known car: VIN, nickname, plate, profile
 carlink tests --vehicle odyssey-2016           # self-tests and per-cylinder misfire counts
 carlink watch --keys stft_b1,ltft_b1,rpm --samples 20
 carlink clear --vehicle odyssey-2016 --vin <VIN> --confirm-clear-codes

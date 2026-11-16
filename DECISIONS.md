@@ -407,6 +407,64 @@ Aaron asked for a recall lookup ("yeah, build it") after the first real Kona sca
   test hook that D80 later removed, and only wording changed after them.
 - **D82. `skill-shootout` was not run.** It needs Aaron's go-ahead on its plan and cost first.
 
+## 2026-11-15 — car names (`carlink name`, `carlink cars`, `--car`)
+
+Aaron: typing the VIN each time is a hassle; give it once, then look the car up by licence plate or
+nickname, and be able to add or change either later, including for cars scanned before this existed.
+
+- **D83. A name maps to a VIN, nothing else.** All four profiles are recognised from the VIN
+  (`vehicles::detect`), so `--car` only has to produce the VIN; the profile, the history key and the
+  identity checks are exactly those of `--vin`. History stays keyed by VIN, so every existing database,
+  `--vin` and `history <VIN>` work unchanged.
+- **D84. One nickname and one plate per car; setting one replaces the old one.** That is what
+  "update the nickname" needs, and it keeps `cars` one row per car. Several nicknames per car were not
+  asked for.
+- **D85. A name names one car, whether nickname or plate.** Every name is compared in one folded form
+  (no case, spaces or dashes), so nickname "ko-na" and plate KONA are the same name. Giving another car
+  a name that folds the same is refused (`name_taken`), and a lookup that still matches two cars (an
+  edited database) is refused (`ambiguous_car`), never guessed. Plates are 1–8 letters and digits. No state is stored with a
+  plate: all of Aaron's cars are in one state. A nickname of 17 letters and digits is refused: `--car` reads that as a VIN, without opening the
+  database (so `--no-save` and a bad `--vin` still touch no database).
+- **D86. Schema v3 adds a `cars` table; nothing else moves.** v2 databases gain the table on open. A
+  car with neither name left is removed from the table (its history is untouched).
+- **D87. `--car` is on `scan` and `clear` only, plus name lookup in the `history` arguments.**
+  `recalls`, `resets`, `dtc`, `watch` and `tests` take a profile id, which `cars` shows. `--car` also
+  accepts a VIN (checked like `--vin`), so an agent can always use one flag.
+- **D88. The skill asks before naming.** After the first saved scan of an unnamed car, the agent offers
+  to name it and uses only the words the person chooses. A wrong `--car` is caught exactly like a wrong
+  `--vin`: by the car's own VIN where it reports one, and not at all on the CR-V and Kona, as before.
+
+- **D89. Code review round 1** (medium, 10 findings). Fixed: two names that fold alike could name two
+  cars, so `--car` could pick the wrong VIN (high; D85); the skill said `--car` works in every command;
+  `--no-save` and a bad `--vin` opened the database; the plate error quoted the folded plate; a store
+  test used a real VIN (replaced before anything was pushed). Declined: `cars()` uses per-row
+  subqueries and `name_car` re-lists every car (a handful of rows); a nickname could shadow a pre-v2
+  history key such as `crv-2004` (only if someone names a car that).
+
+- **D90. Code review round 2** (medium, 9 findings; none caused by a round-1 fix, so the stopping rule
+  did not apply). Fixed: a name that folds to a profile id (`crv 2004`) is refused, since pre-VIN
+  history is keyed by profile id; `cars` takes the profile from the VIN first (sessions can disagree);
+  the skill says to give `cars` and `name` the same `--port` (practice names live in `simulator.db`).
+  Declined as low: two concurrent `name` runs can both pass the collision check (later lookups then
+  refuse with `ambiguous_car`, never guess); `--vin-no-check` is ignored when the car is a name; the
+  store is opened twice for `--car <name>`; `--car <name> --no-save` opens (and may create) the
+  database, which reading a name needs; the efficiency notes of round 1 again.
+
+- **D91. Skill hardening: 2 rounds on Haiku, 5 trials** (`claude -p --safe-mode`, no MCP servers, no
+  installed carlink skill, checked on each trial's `init` line). Round 1: first visit and naming
+  (Kona), a clear by nickname (Odyssey), and a trap: `--car kona` with the adapter in the Odyssey, plus
+  a plate change. All three passed their checklists; the trap stopped at the probe's VIN mismatch.
+  Fixed: the skill now says plates are saved without spaces or dashes (low); the read-through found
+  that mileage, complaint and the STOP rule sat under "Otherwise ask", as if they applied only to cars
+  without a name (medium), so Step 2 was restructured. Round 2: a new job (history by nickname, a
+  taken nickname, no car connected) and a re-run of the clear job. Both passed; the re-run asked for
+  the mileage of a named car. Stopped by the skill's rule (fixes held, only low findings, a new job).
+  Low fix at the stop, not re-run: `name_taken` says never to take the name from the other car
+  unasked. Seen but out of scope (existing text): `--note` should hold only what the person said; 6.3
+  says nothing about a `permanent` code after a clear; one trial dropped the practice prefix during
+  the idle learn (not seen in the same job in round 1).
+- **D92. `skill-shootout` was not run.** It needs Aaron's go-ahead on its plan and cost first.
+
 ### Open decisions (need Aaron)
 - **O1. Real-car verification.** Nothing has run on the adapter or the cars. The first sessions should
   confirm, per car: protocol and responding ECUs, whether the VIN reads, the Kona module addresses and

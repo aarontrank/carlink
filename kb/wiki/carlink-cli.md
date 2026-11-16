@@ -2,7 +2,7 @@
 title: carlink CLI
 type: entity
 created: 2026-11-07
-updated: 2026-11-13
+updated: 2026-11-15
 sources:
   - code:carlink
 tags: [carlink, tooling]
@@ -27,7 +27,8 @@ are in the repo's `DECISIONS.md`.
 | `resets` | Per-vehicle procedures; only code clearing is done by carlink | [[kona-ev-resets]], [[honda-maintenance-minder]], [[odyssey-2016-tpms-calibration]], [[honda-idle-relearn]] |
 | `recalls` | NHTSA's recall list for the profile's make, model and year (the only command that uses the internet; via the system's `curl`, never sends the VIN), merged with the profile's list; falls back to that list offline. Cannot tell whether a recall was done on a car | [[nhtsa-recalls-api]] |
 | `raw` | One read-only request (01 02 03 06 07 09 0A 18 19 21 22), optional 11-bit header | [[adapter-safety]] |
-| `history` | vehicles / sessions / show / trend / keys / dtcs / compare over SQLite (`~/.local/share/carlink/carlink.db`; simulator runs go to `simulator.db`) | — |
+| `history` | vehicles / sessions / show / trend / keys / dtcs / compare over SQLite (`~/.local/share/carlink/carlink.db`; simulator runs go to `simulator.db`). A vehicle argument may be a nickname or plate | — |
+| `name`, `cars` | One nickname and one licence plate per VIN (schema v3 table `cars`; a name names one car, as either; plates compared without spaces or dashes). `--car <nickname\|plate\|VIN>` on `scan` and `clear` stands for `--vin`; history keys stay the VIN, so older history and `--vin` work unchanged. `cars` lists named cars plus every VIN in the history | — |
 
 ## Protocol handling
 

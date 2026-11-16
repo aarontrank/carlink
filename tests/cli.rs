@@ -394,3 +394,90 @@ fn recalls_for_an_unknown_vehicle_is_refused() {
     let v: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!((out.status.code(), kind(&v)), (Some(1), "unknown_vehicle"));
 }
+
+#[test]
+fn a_named_car_is_scanned_and_looked_up_by_its_name() {
+    let e = env();
+    let (ok, c) = run(&e, &["name", KONA_VIN, "--nickname", "Kona", "--plate", "8abc 123"]);
+    assert!(ok, "{c}");
+    assert_eq!((c["vin"].as_str(), c["nickname"].as_str(), c["plate"].as_str(), c["profile"].as_str()), (Some(KONA_VIN), Some("Kona"), Some("8ABC123"), Some("kona-ev-2020")));
+    let (ok, r) = run(&e, &["--port", "sim:kona-ev-2020", "scan", "--car", "kona"]);
+    assert!(ok, "{r}");
+    assert_eq!((r["vehicle_key"].as_str(), r["vehicle"]["id"].as_str()), (Some(KONA_VIN), Some("kona-ev-2020")));
+    assert!(r["session_id"].is_i64());
+    let (ok, r) = run(&e, &["--port", "sim:kona-ev-2020", "scan", "--car", "kona", "--no-save"]);
+    assert!(ok && r["session_id"].is_null() && r["vehicle_key"] == KONA_VIN, "{r}");
+    let (_, s) = run(&e, &["--port", "sim:kona-ev-2020", "history", "sessions", "--vehicle", "8ABC-123"]);
+    assert_eq!(s.as_array().unwrap().len(), 1, "{s}");
+    for cmd in ["keys", "dtcs"] {
+        let (ok, v) = run(&e, &["--port", "sim:kona-ev-2020", "history", cmd, "KONA"]);
+        assert!(ok && !v.as_array().unwrap().is_empty(), "{cmd}: {v}");
+    }
+    let (_, t) = run(&e, &["--port", "sim:kona-ev-2020", "history", "trend", "kona", "soh"]);
+    assert_eq!(t["vehicle"].as_str(), Some(KONA_VIN));
+    assert!(!t["points"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn a_name_can_be_changed_or_added_through_an_existing_name() {
+    let e = env();
+    run(&e, &["name", KONA_VIN, "--nickname", "kona"]);
+    let (ok, c) = run(&e, &["name", "kona", "--nickname", "blue", "--plate", "8ABC123"]);
+    assert!(ok, "{c}");
+    assert_eq!((c["vin"].as_str(), c["nickname"].as_str()), (Some(KONA_VIN), Some("blue")));
+    let (ok, c) = run(&e, &["name", "8abc123", "--remove-plate"]);
+    assert!(ok && c["plate"].is_null(), "{c}");
+    let (_, list) = run(&e, &["cars"]);
+    assert_eq!(list[0]["nickname"].as_str(), Some("blue"), "{list}");
+}
+
+#[test]
+fn a_car_that_was_scanned_before_names_existed_can_be_named_and_used() {
+    let e = env();
+    let (ok, _) = run(&e, &["--port", "sim:odyssey-2016", "scan"]);
+    assert!(ok);
+    let (ok, c) = run(&e, &["--port", "sim:odyssey-2016", "name", "5FNRL5H60GB000001", "--nickname", "van"]);
+    assert!(ok && c["sessions"] == 1, "{c}");
+    let (ok, r) = run(&e, &["--port", "sim:odyssey-2016:engine-off", "clear", "--car", "van", "--confirm-clear-codes", "--note", "plugs"]);
+    assert!(ok, "{r}");
+    assert_eq!(r["clear_status"], "cleared");
+}
+
+#[test]
+fn an_unknown_car_name_is_refused_before_connecting() {
+    let e = env();
+    for args in [&["scan", "--car", "kona"][..], &["name", "kona", "--nickname", "x"], &["clear", "--car", "kona", "--confirm-clear-codes"]] {
+        let (ok, v) = run(&e, args);
+        assert!(!ok);
+        assert_eq!(kind(&v), "unknown_car", "{args:?}: {v}");
+    }
+}
+
+#[test]
+fn car_takes_a_vin_too_and_checks_it() {
+    let e = env();
+    let (ok, r) = run(&e, &["--port", "sim:kona-ev-2020", "scan", "--car", &KONA_VIN.to_lowercase()]);
+    assert!(ok, "{r}");
+    assert_eq!(r["vehicle_key"].as_str(), Some(KONA_VIN));
+    let (ok, v) = run(&e, &["scan", "--car", "KM8K53AG1LU000001"]);
+    assert!(!ok);
+    assert!(v["error"].as_str().unwrap().contains("check digit"), "{v}");
+}
+
+#[test]
+fn name_needs_something_to_change() {
+    let e = env();
+    let (ok, v) = run(&e, &["name", KONA_VIN]);
+    assert!(!ok);
+    assert_eq!(kind(&v), "usage", "{v}");
+}
+
+#[test]
+fn a_vin_needs_no_database_and_a_bad_vin_creates_none() {
+    let e = env();
+    let (ok, r) = run(&e, &["--port", "sim:kona-ev-2020", "scan", "--car", KONA_VIN, "--no-save"]);
+    assert!(ok, "{r}");
+    let (ok, _) = run(&e, &["clear", "--vin", "BADVIN", "--confirm-clear-codes"]);
+    assert!(!ok);
+    assert!(!std::path::Path::new(&e.db).exists(), "the database was created");
+}

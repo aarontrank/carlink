@@ -26,7 +26,7 @@ pub const PROFILE: Profile = Profile {
         "ISO 9141-2 K-line; only the PCM (header 48 6B 10) answers. Protocol search takes several seconds.",
         "No separate TCM: transmission faults appear as P0700 plus the specific P07xx from the PCM.",
         "ABS and airbag (SRS) codes cannot be read by carlink or any generic adapter: they need a Honda-capable scan tool or the service manual's SCS blink-code procedure.",
-        "VIN over OBD (0902) may not work: always pass --vehicle crv-2004 --vin <VIN>.",
+        "VIN over OBD (0902) may not work: always pass --vehicle crv-2004 --vin <VIN>, or --car <name> for a car named with `carlink name`.",
         "Maintenance: timing chain (no belt); valve clearance check at 110k mi; plugs 110k; ATF Honda DW-1 only; Type 2 coolant; 5W-20 oil.",
         "A/C blowing warm is a known compressor failure pattern (bulletin 09-076) with no OBD code.",
     ],
