@@ -53,6 +53,17 @@ pub struct VehicleSummary {
     pub last_seen: String,
 }
 
+/// A car the person named, or one in the history under its VIN.
+#[derive(Debug, Default, Serialize)]
+pub struct Car {
+    pub vin: String,
+    pub nickname: Option<String>,
+    pub plate: Option<String>,
+    pub profile: Option<String>,
+    pub sessions: i64,
+    pub last_seen: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct SessionSummary {
     pub id: i64,
@@ -149,6 +160,38 @@ UPDATE sessions SET vin = json_extract(report, '$.scan.vin'), profile = json_ext
 UPDATE sessions SET vehicle = vin WHERE vin IS NOT NULL;
 ";
 
+/// Version 3: a nickname and a licence plate per car. Plates are stored as `fold` gives them.
+const SCHEMA_V3: &str = "
+CREATE TABLE IF NOT EXISTS cars (vin TEXT PRIMARY KEY, nickname TEXT UNIQUE COLLATE NOCASE, plate TEXT UNIQUE);
+";
+
+/// The form names are compared in: nicknames and plates alike, so "ko-na" and plate KONA are one name.
+fn fold(name: &str) -> String {
+    name.chars().filter(|c| !matches!(c, ' ' | '-')).collect::<String>().to_ascii_uppercase()
+}
+
+fn check_plate(p: &str) -> Result<String> {
+    let folded = fold(p);
+    if folded.is_empty() || folded.len() > 8 || !folded.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Err(crate::problem::problem("bad_input", format!("'{p}' is not a licence plate"), "A plate is 1 to 8 letters and digits; spaces and dashes are ignored."));
+    }
+    Ok(folded)
+}
+
+/// 17 letters and digits: read as a VIN, never as a nickname.
+pub fn vin_shaped(s: &str) -> bool {
+    let s = s.trim();
+    s.len() == 17 && s.bytes().all(|b| b.is_ascii_alphanumeric())
+}
+
+fn check_nickname(n: &str) -> Result<String> {
+    let n = n.trim();
+    if n.is_empty() || n.chars().count() > 40 || vin_shaped(n) {
+        return Err(crate::problem::problem("bad_input", format!("'{n}' cannot be a nickname"), "A nickname is 1 to 40 characters and must not look like a VIN."));
+    }
+    Ok(n.to_string())
+}
+
 impl Store {
     pub fn open(path: &Path) -> Result<Store> {
         if let Some(dir) = path.parent() {
@@ -163,11 +206,14 @@ impl Store {
 
     fn init(db: Connection) -> Result<Store> {
         let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version < 2 {
+        if version < 3 {
             let tx = db.unchecked_transaction()?;
-            tx.execute_batch(SCHEMA_V1)?;
-            tx.execute_batch(SCHEMA_V2)?;
-            tx.execute_batch("PRAGMA user_version = 2")?;
+            if version < 2 {
+                tx.execute_batch(SCHEMA_V1)?;
+                tx.execute_batch(SCHEMA_V2)?;
+            }
+            tx.execute_batch(SCHEMA_V3)?;
+            tx.execute_batch("PRAGMA user_version = 3")?;
             tx.commit()?;
         }
         Ok(Store { db })
@@ -291,6 +337,77 @@ impl Store {
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 
+    pub fn find_car(&self, name: &str) -> Result<Option<String>> {
+        let mut vins = self.cars_named(name)?;
+        if vins.len() > 1 {
+            return Err(crate::problem::problem("ambiguous_car", format!("'{}' names more than one car: {}", name.trim(), vins.join(", ")),
+                "Use the VIN, and give one of those cars another name with `carlink name <VIN> --nickname <name>` (or --plate)."));
+        }
+        Ok(vins.pop())
+    }
+
+    fn cars_named(&self, name: &str) -> Result<Vec<String>> {
+        let name = fold(name);
+        let mut q = self.db.prepare("SELECT vin, nickname, plate FROM cars ORDER BY vin")?;
+        let rows = q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, Option<String>>(2)?)))?;
+        let mut vins = Vec::new();
+        for row in rows {
+            let (vin, nickname, plate) = row?;
+            if [nickname, plate].iter().flatten().any(|n| fold(n) == name) {
+                vins.push(vin);
+            }
+        }
+        Ok(vins)
+    }
+
+    /// Sets (`Some(Some)`), removes (`Some(None)`) or keeps (`None`) a car's nickname and plate. A name
+    /// may name only one car, as a nickname or a plate.
+    pub fn name_car(&self, vin: &str, nickname: Option<Option<String>>, plate: Option<Option<String>>) -> Result<Car> {
+        let nickname = nickname.map(|n| n.as_deref().map(check_nickname).transpose()).transpose()?;
+        let plate = plate.map(|p| p.as_deref().map(check_plate).transpose()).transpose()?;
+        for name in [nickname.clone().flatten(), plate.clone().flatten()].into_iter().flatten() {
+            if crate::vehicles::PROFILES.iter().any(|p| fold(p.id) == fold(&name)) {
+                return Err(crate::problem::problem("bad_input", format!("'{name}' is a vehicle profile id"),
+                    "Pick another name: history saved without a VIN is filed under the profile id."));
+            }
+            if let Some(other) = self.cars_named(&name)?.into_iter().find(|v| v != vin) {
+                return Err(crate::problem::problem("name_taken", format!("'{name}' already names the car with VIN {other}"),
+                    "Pick another name, or first remove it from that car with `carlink name <that car> --remove-nickname` (or --remove-plate)."));
+            }
+        }
+        let tx = self.db.unchecked_transaction()?;
+        tx.execute("INSERT INTO cars (vin) VALUES (?1) ON CONFLICT DO NOTHING", [vin])?;
+        if let Some(n) = nickname {
+            tx.execute("UPDATE cars SET nickname = ?2 WHERE vin = ?1", params![vin, n])?;
+        }
+        if let Some(p) = plate {
+            tx.execute("UPDATE cars SET plate = ?2 WHERE vin = ?1", params![vin, p])?;
+        }
+        tx.execute("DELETE FROM cars WHERE vin = ?1 AND nickname IS NULL AND plate IS NULL", [vin])?;
+        tx.commit()?;
+        Ok(self.cars()?.into_iter().find(|c| c.vin == vin).unwrap_or(Car { vin: vin.into(), ..Default::default() }))
+    }
+
+    /// Every named car and every car in the history under its VIN, most recently seen first.
+    pub fn cars(&self) -> Result<Vec<Car>> {
+        let mut q = self.db.prepare(
+            "WITH v AS (SELECT vin FROM cars UNION SELECT vehicle FROM sessions WHERE vin IS NOT NULL)
+             SELECT v.vin, c.nickname, c.plate, (SELECT MAX(profile) FROM sessions s WHERE s.vehicle = v.vin),
+                    (SELECT COUNT(*) FROM sessions s WHERE s.vehicle = v.vin), (SELECT MAX(at) FROM sessions s WHERE s.vehicle = v.vin) AS last
+             FROM v LEFT JOIN cars c ON c.vin = v.vin ORDER BY last IS NULL, last DESC, v.vin",
+        )?;
+        let rows = q.query_map([], |r| {
+            Ok(Car { vin: r.get(0)?, nickname: r.get(1)?, plate: r.get(2)?, profile: r.get(3)?, sessions: r.get(4)?, last_seen: r.get(5)? })
+        })?;
+        let mut cars: Vec<Car> = rows.collect::<rusqlite::Result<_>>()?;
+        for c in &mut cars {
+            if let Some(p) = crate::vehicles::detect(&c.vin) {
+                c.profile = Some(p.id.to_string());
+            }
+        }
+        Ok(cars)
+    }
+
     pub fn dtc_history(&self, vehicle: &str) -> Result<Vec<DtcHistory>> {
         let mut q = self.db.prepare(
             "WITH latest AS (SELECT id FROM sessions WHERE vehicle = ?1 AND codes_complete = 1 ORDER BY at DESC, id DESC LIMIT 1)
@@ -368,15 +485,124 @@ mod tests {
         assert_eq!(s.sessions(None, 5).unwrap().len(), 3);
     }
 
+    const KONA: &str = "KM8K53AG0LU000001";
+    const ODY: &str = "5FNRL5H60GB000001";
+
+    fn set(v: &str) -> Option<Option<String>> {
+        Some(Some(v.into()))
+    }
+
+    #[test]
+    fn a_named_car_is_found_by_nickname_or_plate_however_it_is_typed() {
+        let s = store();
+        s.name_car(KONA, set("Kona"), set("8abc 123")).unwrap();
+        for name in ["kona", "KONA", " Kona ", "8ABC123", "8abc-123"] {
+            assert_eq!(s.find_car(name).unwrap().as_deref(), Some(KONA), "{name}");
+        }
+        assert_eq!(s.find_car("odyssey").unwrap(), None);
+    }
+
+    #[test]
+    fn a_new_nickname_or_plate_replaces_the_old_one_and_either_can_be_removed() {
+        let s = store();
+        s.name_car(KONA, set("kona"), set("8ABC123")).unwrap();
+        let c = s.name_car(KONA, set("blue car"), None).unwrap();
+        assert_eq!((c.nickname.as_deref(), c.plate.as_deref()), (Some("blue car"), Some("8ABC123")));
+        assert_eq!(s.find_car("kona").unwrap(), None);
+        let c = s.name_car(KONA, None, Some(None)).unwrap();
+        assert_eq!(c.plate, None);
+        assert_eq!(s.find_car("8ABC123").unwrap(), None);
+        s.name_car(KONA, Some(None), None).unwrap();
+        assert!(s.cars().unwrap().is_empty(), "a car with no name and no history is forgotten");
+    }
+
+    #[test]
+    fn a_name_another_car_has_is_refused() {
+        let s = store();
+        s.name_car(KONA, set("kona"), set("8ABC123")).unwrap();
+        for (nick, plate) in [(set("KONA"), None), (None, set("8abc 123")), (set("8ABC123"), None), (None, set("kona"))] {
+            let e = s.name_car(ODY, nick, plate).unwrap_err();
+            assert!(e.to_string().contains(KONA), "{e}");
+        }
+        s.name_car(KONA, None, set("KONA")).unwrap();
+    }
+
+    #[test]
+    fn names_that_differ_only_in_spaces_dashes_or_case_are_the_same_name() {
+        let s = store();
+        s.name_car(ODY, set("ko-na"), None).unwrap();
+        let e = s.name_car(KONA, None, set("KONA")).unwrap_err();
+        assert!(e.to_string().contains(ODY), "{e}");
+        s.name_car(KONA, None, set("BLUECAR")).unwrap();
+        assert!(s.name_car(ODY, set("Blue Car"), None).unwrap_err().to_string().contains(KONA));
+        assert_eq!(s.find_car("bluecar").unwrap().as_deref(), Some(KONA));
+    }
+
+    #[test]
+    fn a_lookup_that_matches_two_cars_is_refused() {
+        let s = store();
+        s.db.execute_batch(&format!("INSERT INTO cars VALUES ('{ODY}', 'ko-na', NULL), ('{KONA}', NULL, 'KONA')")).unwrap();
+        assert!(s.find_car("kona").is_err());
+    }
+
+    #[test]
+    fn a_profile_id_cannot_be_a_name() {
+        for (nick, plate) in [(set("crv 2004"), None), (None, set("CRV2004"))] {
+            assert!(store().name_car(KONA, nick, plate).is_err());
+        }
+    }
+
+    #[test]
+    fn a_bad_plate_is_quoted_as_typed() {
+        let e = store().name_car(KONA, None, set("8 AB*C")).unwrap_err();
+        assert!(e.to_string().contains("'8 AB*C'"), "{e}");
+    }
+
+    #[test]
+    fn names_that_could_be_mistaken_are_refused() {
+        let s = store();
+        for (nick, plate) in [(set(" "), None), (set(ODY), None), (set("KONAKONAKONAKONA1"), None), (set(&"x".repeat(41)), None), (None, set("8ABC1234X")), (None, set("8AB*C")), (None, set("-"))] {
+            assert!(s.name_car(KONA, nick.clone(), plate.clone()).is_err(), "{nick:?} {plate:?}");
+        }
+        assert!(s.cars().unwrap().is_empty());
+    }
+
+    #[test]
+    fn cars_lists_named_cars_and_cars_in_the_history() {
+        let s = store();
+        s.save_session(&NewSession { vehicle: ODY.into(), vin: Some(ODY.into()), profile: Some("crv-2004".into()), kind: "scan".into(), at: Some("2026-11-08T00:00:00Z".into()), ..Default::default() }).unwrap();
+        save(&s, "crv-2004", "2026-11-09T00:00:00Z", vec![], vec![]);
+        s.name_car(KONA, set("kona"), None).unwrap();
+        let c = s.cars().unwrap();
+        let got: Vec<_> = c.iter().map(|c| (c.vin.as_str(), c.nickname.as_deref(), c.profile.as_deref(), c.sessions)).collect();
+        assert_eq!(got, vec![(ODY, None, Some("odyssey-2016"), 1), (KONA, Some("kona"), Some("kona-ev-2020"), 0)]);
+        assert_eq!(c[0].last_seen.as_deref(), Some("2026-11-08T00:00:00Z"));
+    }
+
+    #[test]
+    fn a_version_2_database_keeps_its_history_and_can_name_cars() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v2.db");
+        let old = Connection::open(&path).unwrap();
+        old.execute_batch(SCHEMA_V1).unwrap();
+        old.execute_batch(SCHEMA_V2).unwrap();
+        old.execute_batch("PRAGMA user_version = 2").unwrap();
+        drop(old);
+        save(&Store::open(&path).unwrap(), ODY, "2026-11-08T00:00:00Z", vec![], vec![]);
+        let s = Store::open(&path).unwrap();
+        s.name_car(ODY, set("van"), None).unwrap();
+        assert_eq!(s.sessions(Some(&s.find_car("van").unwrap().unwrap()), 5).unwrap().len(), 1);
+    }
+
     #[test]
     fn a_newer_schema_version_is_left_alone() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("new.db");
         drop(Store::open(&path).unwrap());
-        Connection::open(&path).unwrap().execute_batch("PRAGMA user_version = 3").unwrap();
+        Connection::open(&path).unwrap().execute_batch("PRAGMA user_version = 4").unwrap();
         drop(Store::open(&path).unwrap());
         let v: i64 = Connection::open(&path).unwrap().query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 3);
+        assert_eq!(v, 4);
     }
 
     #[test]

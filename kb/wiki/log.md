@@ -63,3 +63,7 @@ Sources: raw/nhtsa/recalls-api-model-names-2026-11-15.md (model-name and VIN-end
 raw/nhtsa/recalls-hyundai-kona-electric-2020-2026-11-15.json. New page [[nhtsa-recalls-api]] for the new
 `carlink recalls` command; [[carlink-cli]] and [[index]] updated. A wrong model name returns 0 recalls
 with a success message, so each profile pins NHTSA's name.
+
+## [2026-11-15] update | car names
+No new source. [[carlink-cli]] gains `name`, `cars` and `--car`: a nickname and a plate per VIN in
+the history database (schema v3).

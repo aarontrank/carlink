@@ -45,7 +45,7 @@ pub const PROFILE: Profile = Profile {
         "TSB 22-EV-001H-1: motor/reduction-gear rumble.",
     ],
     notes: &[
-        "Generic OBD-II answers only from the MCU and BMS; no RPM/speed PIDs. The car does not report its VIN (the BMS returns a placeholder): always pass --vehicle kona-ev-2020 --vin <VIN>.",
+        "Generic OBD-II answers only from the MCU and BMS; no RPM/speed PIDs. The car does not report its VIN (the BMS returns a placeholder): always pass --vehicle kona-ev-2020 --vin <VIN>, or --car <name> for a car named with `carlink name`.",
         "Module codes are read from 14 modules (modules[]). The airbag unit (SRS) answers but serves its codes only in a session carlink does not open: an airbag light needs the dealer tool.",
         "carlink never sends the OBD clear (service 04) on this car, and never clears the BMS, SRS or SMK modules (battery campaign evidence, airbags, smart key). Other modules are cleared by name.",
         "Battery data comes from BMS DIDs 220101–220105; SOH stays at 100% for a long time, min deterioration moves first.",

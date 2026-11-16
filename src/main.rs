@@ -41,6 +41,9 @@ enum Cmd {
         /// The car's VIN, from the windshield or door jamb; files history under this car when it reports none.
         #[arg(long)]
         vin: Option<String>,
+        /// A car named with `carlink name`: its nickname, its plate, or its VIN. Instead of --vin.
+        #[arg(long, conflicts_with = "vin")]
+        car: Option<String>,
         /// Accept a --vin whose check digit does not match (only for cars built outside North America).
         #[arg(long)]
         vin_no_check: bool,
@@ -59,9 +62,12 @@ enum Cmd {
         /// Vehicle profile (see `vehicles`), e.g. kona-ev-2020. Refused if the VIN says it is a different car.
         #[arg(long)]
         vehicle: Option<String>,
-        /// Required unless the car reports its own VIN.
+        /// Required unless the car reports its own VIN (or --car is given).
         #[arg(long)]
         vin: Option<String>,
+        /// A car named with `carlink name`: its nickname, its plate, or its VIN. Instead of --vin.
+        #[arg(long, conflicts_with = "vin")]
+        car: Option<String>,
         /// Accept a --vin whose check digit does not match (only for cars built outside North America).
         #[arg(long)]
         vin_no_check: bool,
@@ -129,6 +135,30 @@ enum Cmd {
         #[arg(long)]
         header: Option<String>,
     },
+    /// Give a car a nickname and/or its licence plate, so later commands can take `--car <name>` instead
+    /// of the VIN. Setting one replaces the car's old one. Saves only the names.
+    #[command(group(clap::ArgGroup::new("change").required(true).multiple(true).args(["nickname", "plate", "remove_nickname", "remove_plate"])))]
+    Name {
+        /// The car: its VIN the first time, afterwards also its nickname or plate.
+        car: String,
+        /// The new nickname, e.g. kona (1–40 characters, case does not matter).
+        #[arg(long, conflicts_with = "remove_nickname")]
+        nickname: Option<String>,
+        /// The licence plate (spaces and dashes are ignored).
+        #[arg(long, conflicts_with = "remove_plate")]
+        plate: Option<String>,
+        /// Remove the car's nickname.
+        #[arg(long)]
+        remove_nickname: bool,
+        /// Remove the car's plate (e.g. after new plates or selling the car).
+        #[arg(long)]
+        remove_plate: bool,
+        /// Accept a VIN whose check digit does not match (only for cars built outside North America).
+        #[arg(long)]
+        vin_no_check: bool,
+    },
+    /// Every named car and every car in the history: VIN, nickname, plate, profile, sessions, last seen.
+    Cars,
     /// Query saved history.
     History {
         #[command(subcommand)]
@@ -142,7 +172,7 @@ enum HistoryCmd {
     Vehicles,
     /// Sessions, newest first.
     Sessions {
-        /// Vehicle key from `history vehicles`.
+        /// Vehicle key from `history vehicles`, or a nickname or plate from `carlink name`.
         #[arg(long)]
         vehicle: Option<String>,
         /// Most sessions to list.
@@ -156,19 +186,19 @@ enum HistoryCmd {
     },
     /// A reading's values over time, oldest first.
     Trend {
-        /// Vehicle key (the VIN) from `history vehicles`.
+        /// Vehicle key (the VIN) from `history vehicles`, or a nickname or plate from `carlink name`.
         vehicle: String,
         /// Reading key from `history keys`, e.g. ltft_b1 or soh.
         key: String,
     },
     /// Reading keys recorded for a vehicle.
     Keys {
-        /// Vehicle key (the VIN) from `history vehicles`.
+        /// Vehicle key (the VIN) from `history vehicles`, or a nickname or plate from `carlink name`.
         vehicle: String,
     },
     /// Every trouble code ever seen on a vehicle, with first/last seen and whether it is set now.
     Dtcs {
-        /// Vehicle key (the VIN) from `history vehicles`.
+        /// Vehicle key (the VIN) from `history vehicles`, or a nickname or plate from `carlink name`.
         vehicle: String,
     },
     /// What changed between two sessions (e.g. last visit → today): codes new/gone/still set, readings.
@@ -238,6 +268,19 @@ fn checked_vin(vin: Option<&str>, no_check: bool) -> Result<Option<String>> {
     .transpose()
 }
 
+/// The VIN a `--car` value names. 17 letters and digits are a VIN (no name can be); anything else is a
+/// nickname or plate, looked up in the history database `open` returns.
+fn car_vin(car: &str, no_check: bool, open: impl FnOnce() -> Result<Store>) -> Result<String> {
+    if carlink::store::vin_shaped(car) {
+        return Ok(checked_vin(Some(car), no_check)?.expect("given"));
+    }
+    if let Some(vin) = open()?.find_car(car)? {
+        return Ok(vin);
+    }
+    Err(problem("unknown_car", format!("no car is named '{}'", car.trim()),
+        "Run `carlink cars` for the names already given. The first time, use the car's VIN: `--vin <VIN>`, then `carlink name <VIN> --nickname <name>`."))
+}
+
 fn run(cli: Cli) -> Result<Value> {
     let port = cli.port.as_deref();
     let trace = cli.trace.as_deref();
@@ -262,9 +305,12 @@ fn run(cli: Cli) -> Result<Value> {
             }
             v
         }
-        Cmd::Scan { vehicle, vin, vin_no_check, odometer_mi, note, no_save } => {
+        Cmd::Scan { vehicle, vin, car, vin_no_check, odometer_mi, note, no_save } => {
             profile(vehicle.as_deref())?;
-            let vin = checked_vin(vin.as_deref(), vin_no_check)?;
+            let vin = match &car {
+                Some(c) => Some(car_vin(c, vin_no_check, || store(cli.db.clone(), port))?),
+                None => checked_vin(vin.as_deref(), vin_no_check)?,
+            };
             let db = if no_save { None } else { Some(store(cli.db, port)?) };
             let mut a = connect(port, trace)?;
             let r = report::build(&mut a, &Ident { vehicle: vehicle.as_deref(), vin: vin.as_deref() })?;
@@ -276,7 +322,7 @@ fn run(cli: Cli) -> Result<Value> {
             v["session_id"] = json!(session_id);
             v
         }
-        Cmd::Clear { vehicle, vin, vin_no_check, confirm_clear_codes, only, note } => {
+        Cmd::Clear { vehicle, vin, car, vin_no_check, confirm_clear_codes, only, note } => {
             if !confirm_clear_codes {
                 return Err(problem(
                     "confirmation_required",
@@ -285,7 +331,10 @@ fn run(cli: Cli) -> Result<Value> {
                 ));
             }
             profile(vehicle.as_deref())?;
-            let vin = checked_vin(vin.as_deref(), vin_no_check)?;
+            let vin = match &car {
+                Some(c) => Some(car_vin(c, vin_no_check, || store(cli.db.clone(), port))?),
+                None => checked_vin(vin.as_deref(), vin_no_check)?,
+            };
             let db = store(cli.db, port)?;
             let mut a = connect(port, trace)?;
             actions::clear_with_history(&mut a, &db, &Ident { vehicle: vehicle.as_deref(), vin: vin.as_deref() }, &only, note)?
@@ -340,15 +389,26 @@ fn run(cli: Cli) -> Result<Value> {
             json!({"request": req, "bus": a.bus(), "messages": msgs.iter().map(|m| json!({
                 "ecu": m.ecu, "hex": m.data.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ")})).collect::<Vec<_>>()})
         }
+        Cmd::Name { car, nickname, plate, remove_nickname, remove_plate, vin_no_check } => {
+            let vin = car_vin(&car, vin_no_check, || store(cli.db.clone(), port))?;
+            let db = store(cli.db, port)?;
+            let change = |set: Option<String>, remove: bool| if remove { Some(None) } else { set.map(Some) };
+            json!(db.name_car(&vin, change(nickname, remove_nickname), change(plate, remove_plate))?)
+        }
+        Cmd::Cars => json!(store(cli.db, port)?.cars()?),
         Cmd::History { cmd } => {
             let db = store(cli.db, port)?;
+            let key = |v: String| -> Result<String> { Ok(db.find_car(&v)?.unwrap_or(v)) };
             match cmd {
                 HistoryCmd::Vehicles => json!(db.vehicles()?),
-                HistoryCmd::Sessions { vehicle, limit } => json!(db.sessions(vehicle.as_deref(), limit)?),
+                HistoryCmd::Sessions { vehicle, limit } => json!(db.sessions(vehicle.map(key).transpose()?.as_deref(), limit)?),
                 HistoryCmd::Show { id } => json!(db.session(id)?.ok_or_else(|| problem("not_found", format!("no session {id}"), "Run `carlink history sessions` to list session ids."))?),
-                HistoryCmd::Trend { vehicle, key } => json!({"vehicle": vehicle, "key": key, "points": db.trend(&vehicle, &key)?}),
-                HistoryCmd::Keys { vehicle } => json!(db.keys(&vehicle)?),
-                HistoryCmd::Dtcs { vehicle } => json!(db.dtc_history(&vehicle)?),
+                HistoryCmd::Trend { vehicle, key: reading } => {
+                    let vehicle = key(vehicle)?;
+                    json!({"vehicle": vehicle, "key": reading, "points": db.trend(&vehicle, &reading)?})
+                }
+                HistoryCmd::Keys { vehicle } => json!(db.keys(&key(vehicle)?)?),
+                HistoryCmd::Dtcs { vehicle } => json!(db.dtc_history(&key(vehicle)?)?),
                 HistoryCmd::Compare { from, to } => json!(db.compare(from, to)?.ok_or_else(|| problem("not_found", format!("session {from} or {to} does not exist"), "Run `carlink history sessions --vehicle <key>` to list session ids."))?),
             }
         }
